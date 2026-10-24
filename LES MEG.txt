@@ -27,6 +27,11 @@ TIPS
 - Har du allerede en konvertert modell (mappe med model.bin), kopier innholdet til
   data\models\large\ så slipper du nedlastingen.
 - Alt arbeidet ditt ligger i mappen "data". Ta vare på den hvis du flytter eller oppdaterer appen.
+- Forkortelser skrives alltid helt ut, slik det ble sagt: "f.eks." blir "for eksempel", "osv." blir
+  "og så videre".
+- Linjene holder seg rundt 42 tegn, men kan bli noen tegn lengre når det holder en setning samlet,
+  så det siste ordet i en setning ikke havner alene i neste undertekst. Hvor mye, velger du under
+  Innstillinger. Vil du bruke det på en video som allerede er ferdig: «Bruk reglene på nytt».
 - Ingenting lastes opp. Bare modellene og stavelisten lastes ned fra internett.
 
 KORREKTURLESING (raskest slik)

@@ -83,7 +83,7 @@ def test_cues_follow_the_rules():
     for k, c in enumerate(cues):
         lines = c["text"].split("\n")
         assert len(lines) <= 2
-        assert all(len(l) <= p.max_chars for l in lines), c["text"]
+        assert all(len(l) <= p.max_chars + p.char_slack for l in lines), c["text"]
         assert c["end"] - c["start"] <= p.max_dur + 1e-6
         assert c["end"] > c["start"]
         if k:
@@ -95,6 +95,66 @@ def test_cues_follow_the_rules():
 def test_number_stays_with_its_unit():
     cues = make_cues(words_from(LONG), params())
     assert any("23 prosent" in c["text"].replace("\n", " ") for c in cues)
+
+
+SAMPLES = [
+    "Vi har jobbet med dette prosjektet i over to år nå, og vi er veldig stolte av resultatet vi har fått. "
+    "Nå skal vi vise dere hvordan det fungerer i praksis for kundene våre.",
+    "Det viktigste for oss er at de ansatte trives på jobben hver eneste dag. Derfor har vi satset mye på "
+    "trivsel og et godt arbeidsmiljø. Det har gitt resultater som vi er stolte av i dag.",
+    "Når vi ser på tallene fra i fjor, ser vi at salget økte betydelig i alle regionene våre. Spesielt i nord "
+    "gikk det bra. Vi tror at det skyldes den nye strategien vi innførte tidlig på året.",
+    "Hei og velkommen til denne videoen om sikkerhet på arbeidsplassen. I dag skal vi snakke om tre viktige "
+    "ting som alle bør kjenne til. Først skal vi se på brannvern og rømningsveier i bygget.",
+    "Kundene våre forventer rask levering og god service hver eneste gang de handler hos oss. Dette er noe vi "
+    "tar på alvor. Vi har derfor investert i nye systemer som gjør hverdagen enklere for alle.",
+]
+ENDS = re.compile(r"[.!?…]$")
+
+
+@pytest.mark.parametrize("text", SAMPLES)
+def test_no_word_is_cut_off_from_its_sentence(text):
+    """The end user's complaint: the last word of a sentence ended up alone in the next subtitle (or line)."""
+    cues = make_cues(words_from(text), params())
+    for a, b in zip(cues, cues[1:]):
+        assert not (not ENDS.search(a["text"]) and ENDS.search(b["text"].split()[0])), (a["text"], b["text"])
+    for c in cues:
+        lines = c["text"].split("\n")
+        if len(lines) == 2:
+            assert not (ENDS.search(lines[1].split()[0]) and not ENDS.search(lines[0])), c["text"]
+
+
+def test_a_line_may_go_a_little_over_the_limit_but_never_past_the_slack():
+    p = params()
+    lines = segment.split_lines([segment.Word(w, 0, 0) for w in
+                                 "Vi har jobbet hardt med å forbedre rutinene, og nå ser vi resultatet".split()], p)[0]
+    assert all(len(l) <= p.max_chars for l in lines)  # within the limit when that works well
+    long_word = "x" * 45
+    assert segment.split_lines([segment.Word(w, 0, 0) for w in ["Hei", long_word]], p)[0] == ["Hei", long_word]
+    assert segment.split_lines([segment.Word(w, 0, 0) for w in ["Hei", "x" * 47]], p) is None  # past 42 + 4
+    assert segment.split_lines([segment.Word(w, 0, 0) for w in ["Hei", long_word]], params(char_slack=0)) is None
+
+
+def text_of(raw, **kw):
+    return " ".join(c["text"].replace("\n", " ") for c in make_cues(words_from(raw), params(**kw)))
+
+
+def test_abbreviations_are_written_out():
+    assert text_of("Vi har f.eks. sett at bl.a. prisene har økt, osv. Neste år blir det ca. ti prosent bedre.") == (
+        "Vi har for eksempel sett at blant annet prisene har økt, og så videre. "
+        "Neste år blir det cirka ti prosent bedre.")
+    assert text_of("F.eks. dette, feks det, og pga. været osv") == (
+        "For eksempel dette, for eksempel det, og på grunn av været og så videre")
+    assert text_of("Vi ser f. eks. at det går bra.") == "Vi ser for eksempel at det går bra."
+    assert text_of("Dette gjeld t.d. bygget, dvs. alt.", lang="nn") == "Dette gjeld til dømes bygget, det vil seie alt."
+    assert text_of("Ordet bla og kr står igjen.") == "Ordet bla og kroner står igjen."
+
+
+def test_written_out_words_share_the_abbreviations_time():
+    w = words_from("Vi ser f.eks. bygget")
+    words = segment.expand_abbreviations([segment.Word(x["w"].strip(), x["s"], x["e"]) for x in w])
+    assert [x.text for x in words] == ["Vi", "ser", "for", "eksempel", "bygget"]
+    assert words[2].start == w[2]["s"] and abs(words[3].end - w[2]["e"]) < 1e-9 and words[2].end == words[3].start
 
 
 def test_fillers_are_removed_and_next_word_capitalised():

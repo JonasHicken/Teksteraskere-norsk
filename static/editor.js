@@ -301,7 +301,8 @@ class Editor {
     if (!c.text.trim()) out.push(["bad", t("f_empty")]);
     if (lines.length > 2) out.push(["bad", t("f_lines")]);
     const longest = Math.max(...lines.map((l) => l.length));
-    if (longest > R.max_chars) out.push(["bad", t("f_long", { n: longest, max: R.max_chars })]);
+    const limit = R.max_chars + (R.char_slack ?? 4);  // a few over is allowed when it keeps a sentence together
+    if (longest > limit) out.push(["bad", t("f_long", { n: longest, max: limit })]);
     const nx = this.cues[i + 1];
     if (nx && c.end > nx.start + 0.001) out.push(["bad", t("f_overlap")]);
     if (dur > 0 && chars / dur > R.max_cps + 0.5) out.push(["info", t("f_fast", { n: num(chars / dur, 0) })]);

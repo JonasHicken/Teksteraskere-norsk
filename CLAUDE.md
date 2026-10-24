@@ -27,6 +27,18 @@ Claude Code on 2026-10-08. Read this fully before changing anything.
 42 chars/line, max 2 lines, 1–7 s per cue, max 17 chars/s, ≥0.08 s gap between cues, cue lingers 0.3 s after
 last word, never join across a 1.2 s pause. Light editing: filler words (eh, ehm, øh, mm, hm…) removed.
 Line breaks avoid ending a line on weak words (articles, prepositions, adjectives before nouns, numerals).
+**End-user feedback (2026-10-24):**
+- **42 is a soft limit.** `char_slack` (default 4, in Settings) lets a line run up to 46 at a cost of 2.5 per
+  character over, and `orphan_cost` / `split_lines` penalise a sentence's last 1–2 words cut off into the next
+  cue or line (+10 / +4), and a new sentence's first word left alone at the end (+6). On 5 realistic samples the
+  old segmenter left 1 orphan, now 0 (`test_no_word_is_cut_off_from_its_sentence`). The editor flags a line as
+  too long only past 42 + slack.
+- **No abbreviations, ever.** `expand_abbreviations` (after `clean_words`, before segmentation, so the rules
+  count the full text) writes out `ABBREV` (+ `ABBREV_NN` for nynorsk, from the project's language):
+  f.eks./feks → for eksempel, bl.a., osv., dvs., ca., pga. … Also when split ("f." + "eks."). The full words
+  share the abbreviation's time span; the dot stays only at a sentence end; the capital is kept. Words that are
+  also real words (bla, mm, ol, st) are deliberately not in the table. Existing videos get it with
+  "Bruk reglene på nytt".
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
 
 ## Run it

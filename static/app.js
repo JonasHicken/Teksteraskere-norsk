@@ -471,7 +471,7 @@ function viewSettings() {
     e.preventDefault();
     const f = new FormData(e.target);
     const rules = {};
-    for (const k of ["max_chars", "max_cps", "min_dur", "max_dur"]) rules[k] = Number(f.get(k));
+    for (const k of ["max_chars", "char_slack", "max_cps", "min_dur", "max_dur"]) rules[k] = Number(f.get(k));
     await saveSettings({ glossary: f.get("glossary"), hotwords: f.get("hotwords") === "on",
       collapse_repeats: f.get("collapse_repeats") === "on", double_check: f.get("double_check") === "on",
       pause_on_type: f.get("pause_on_type") === "on", burn_tools: f.get("burn_tools") === "on", rules });
@@ -491,6 +491,7 @@ function viewSettings() {
       h("p", { class: "muted" }, t("rules_help")),
       h("div", { class: "num-grid" },
         numField("max_chars", t("r_max_chars"), 1, 20, 60),
+        numField("char_slack", t("r_char_slack"), 1, 0, 10),
         numField("max_cps", t("r_max_cps"), 0.5, 8, 30),
         numField("min_dur", t("r_min_dur"), 0.1, 0.3, 3),
         numField("max_dur", t("r_max_dur"), 0.5, 3, 12)),

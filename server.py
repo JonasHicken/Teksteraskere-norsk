@@ -78,11 +78,17 @@ def allow_set():
     return store.glossary_allow() | frozenset(w.lower() for t in learner.hint_words() for w in t.split())
 
 
+def seg_params(settings, pid):
+    """Segmentation rules for this project (its language decides how abbreviations are written out)."""
+    return segment.params(settings["rules"], collapse_repeats=settings.get("collapse_repeats", False),
+                          lang=store.get(pid).get("language") or "no")
+
+
 def finish_cues(pid, words, settings):
     """Segment, apply learned corrections, store as the new baseline. Returns cues."""
-    p = segment.params(settings["rules"], collapse_repeats=settings.get("collapse_repeats", False))
+    p = seg_params(settings, pid)
     cues = segment.make_cues(words, p)
-    fixes = learner.apply(cues, wrap=lambda t: segment.wrap_text(t, p), max_chars=p.max_chars)
+    fixes = learner.apply(cues, wrap=lambda t: segment.wrap_text(t, p), max_chars=p.max_chars + p.char_slack)
     store.save_cues(pid, cues, edited=False)
     store.save_json(pid, "cues_orig.json", cues)
     store.save_json(pid, "autofix.json", fixes)
@@ -598,7 +604,7 @@ def compute_stats(pid):
         orig = store.load_json(pid, "cues_orig.json", None)
         if orig is None:
             s = store.settings()
-            orig = segment.make_cues(store.words(pid), segment.params(s["rules"]))
+            orig = segment.make_cues(store.words(pid), seg_params(s, pid))
             store.save_json(pid, "cues_orig.json", orig)
         rate = learner.update_project(pid, orig, store.cues(pid))
         if m.get("edit_rate") != rate:

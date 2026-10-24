@@ -42,9 +42,12 @@ questions. It is kept up to date so that any session, human or AI, can pick up t
     only kept if it passes hallucination checks.
   - **Double-check.** A second, smaller model transcribes the video again, and every place where the two
     models disagree is flagged for a human to listen to.
-- **Subtitle rules.** Max 2 lines of 42 characters, 1–7 s on screen, max 17 characters per second, and a
-  minimum gap between subtitles. Line breaks avoid ending on weak words. All of these can be changed in the
-  settings.
+- **Subtitle rules.** Max 2 lines of about 42 characters, 1–7 s on screen, max 17 characters per second, and
+  a minimum gap between subtitles. Line breaks avoid ending on weak words. The 42 is a soft limit: a line may
+  run a few characters over when that keeps a sentence together, so a sentence's last word is never pushed
+  alone into the next subtitle. All of these can be changed in the settings.
+- **Says what was said.** Abbreviations are written out in full ("f.eks." becomes "for eksempel"), in
+  Bokmål or Nynorsk.
 - **An editor built for proofreading.**
   - **It shows only what needs a look:** words the model was unsure of, spelling, places where the models
     disagree, and rule breaks.
