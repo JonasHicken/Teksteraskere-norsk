@@ -159,11 +159,19 @@ BALANCE = 0.6         # cost per character of difference between the two lines o
 BALANCE_FREE = 4      # differences up to this many characters are free
 MID_CLAUSE = 3        # extra cost of starting a new subtitle inside a clause (no punctuation, no pause)
 SHORT_CUE = 15        # a subtitle this short that stops mid-clause costs extra
+TOP_LONGER = 5.0      # extra cost when the top line is the longer one (the longer line goes at the bottom)
+TOP_LONGER_PER = 0.6  # ... plus this per character it is longer
 
 
 def balance_cost(a, b):
     """Two lines over each other should be about the same length."""
     return max(0, abs(a - b) - BALANCE_FREE) * BALANCE
+
+
+def top_longer_cost(a, b):
+    """When the two lines clearly differ, the longer one should be the bottom line (within BALANCE_FREE they
+    count as the same length)."""
+    return TOP_LONGER + (a - b - BALANCE_FREE) * TOP_LONGER_PER if a - b > BALANCE_FREE else 0.0
 
 
 def break_cost(a, b):
@@ -209,12 +217,19 @@ def split_lines(sub, p):
         l2 = " ".join(w.text for w in sub[k:])
         if len(l1) > limit or len(l2) > limit:
             continue
-        c = (break_cost(sub[k - 1], sub[k]) + balance_cost(len(l1), len(l2)) + (1.0 if len(l1) > len(l2) else 0.0)
+        c = (break_cost(sub[k - 1], sub[k]) + balance_cost(len(l1), len(l2)) + top_longer_cost(len(l1), len(l2))
              + over([l1, l2], p) * 5)
         if SENT_END.search(sub[k].text) and not SENT_END.search(sub[k - 1].text):
             c += 10  # a sentence's last word alone at the start of line 2 ("... regionene / våre. Spesielt ...")
         if k >= 2 and SENT_END.search(sub[k - 2].text):
             c += 6   # a new sentence's first word alone at the end of line 1
+        # Priorities for the two lines: keep phrases together, then the longer line at the bottom, then even
+        # lengths. A line ending on "dette", "med", "og" or on "den nye" (before its noun) costs more than both.
+        if not re.search(r"[.!?,;:]$", sub[k - 1].text):
+            if core(sub[k - 1]) in NO_END_STRONG:
+                c += 30
+            elif core(sub[k - 1]) in NO_END_MED:
+                c += 25
         if best is None or c < best[1]:
             best = ([l1, l2], c)
     return best  # None if it cannot fit in two lines

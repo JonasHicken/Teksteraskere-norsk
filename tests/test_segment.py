@@ -145,7 +145,27 @@ def test_two_lines_are_about_the_same_length(per_word, pauses):
             if len(lines) == 2:
                 diffs.append(abs(len(lines[0]) - len(lines[1])))
     assert diffs and sum(diffs) / len(diffs) <= 8, diffs
-    assert max(diffs) <= 18, diffs  # 34/16 "Vi har jobbet med dette prosjektet / i over to år nå," beats splitting "dette / prosjektet"
+    # 13/37 "Vi har jobbet / med dette prosjektet i over to år nå,": the other splits are "dette / prosjektet"
+    # (breaks a phrase) or 34/16 (longer line on top)
+    assert max(diffs) <= 24, diffs
+
+
+@pytest.mark.parametrize("per_word, pauses", SPEECH)
+def test_the_longer_line_is_the_bottom_one(per_word, pauses):
+    """End user: if one line is longer, it should be the bottom one. The only exception is when every such
+    split would break a phrase ("den nye / strategien") or need a line over 42."""
+    p = params()
+    for text in SAMPLES + [LONG]:
+        for c in make_cues(natural(text, per_word, pauses), p):
+            lines = c["text"].split("\n")
+            if len(lines) < 2 or len(lines[0]) - len(lines[1]) <= 6:
+                continue  # bottom longer, or about the same length
+            toks = c["text"].split()
+            for k in range(1, len(toks)):
+                l1, l2 = " ".join(toks[:k]), " ".join(toks[k:])
+                if len(l1) < len(l2):
+                    weak = segment.core(toks[k - 1]) in segment.NO_END_STRONG | segment.NO_END_MED
+                    assert weak or len(l2) > p.max_chars, (c["text"], l1, l2)  # slack is for sentences, not shape
 
 
 @pytest.mark.parametrize("text, lines", [

@@ -47,6 +47,13 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
   sentence fits instead of losing its last words. Measured with a scratch harness on the samples at 3
   speech speeds, with and without pauses: mean line difference 7.7 to 6.6, worst 24 to 18, 0 orphans,
   0 weak line ends, 0 lines past 46. Every change has a test that fails when it is reverted (checked).
+- **Longer line at the bottom (third round).** Line priorities in `split_lines`: keep phrases together
+  (line ending on a `NO_END_STRONG` / `NO_END_MED` word +30 / +25), then the longer line at the bottom
+  (`top_longer_cost`: 5 + 0.6 per character the top is longer, beyond the 4 free characters), then even
+  lengths (`balance_cost`). On the samples the top line is clearly longer (more than 6) only once:
+  "Vi tror at det skyldes den nye strategien / vi innførte tidlig på året.", where every bottom-heavy split
+  breaks "den nye / strategien" or needs a line over 42 (the slack is for sentences, not for shape).
+  `test_the_longer_line_is_the_bottom_one` checks exactly that rule.
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
 
 ## Run it
