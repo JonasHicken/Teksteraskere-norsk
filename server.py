@@ -561,6 +561,8 @@ def downloads():
 def delete_model(name: str):
     if name not in MODELS:
         raise HTTPException(404)
+    if worker.current or name in worker.downloading:
+        raise HTTPException(409, "busy")  # a job (or its double-check) may be using it right now
     engine.delete(name)
     return state()
 

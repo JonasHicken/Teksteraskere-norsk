@@ -132,6 +132,7 @@ function ask(title, body, okLabel, { danger = false } = {}) {
   $("#dlg-cancel").textContent = t("cancel");
   return new Promise((res) => {
     d.addEventListener("close", () => res(d.returnValue === "ok"), { once: true });
+    d.returnValue = "";  // a dialog closed without a button must never count as the previous dialog's "ok"
     d.showModal();
     $("#dlg-cancel").focus();
   });
@@ -540,7 +541,7 @@ async function loadLearned() {
 function updateModels() {
   const ul = $("#modellist");
   if (!ul) return;
-  const busy = S.state.jobs.some((j) => RUNNING.includes(j.status));
+  const busy = !!S.state.current || S.state.jobs.some((j) => RUNNING.includes(j.status) || j.checking);
   ul.replaceChildren(...["large", "medium", "small"].map((n) => {
     const m = S.state.models[n];
     const p = S.dl[n];

@@ -128,6 +128,7 @@ class Engine:
         self._loaded = {}  # name -> model; large + small both stay loaded (~2 GB RAM), so a queue
         self.lock = threading.Lock()  # of videos doesn't reload the large model for every video
         self._audio = (None, None)  # (path, 16 kHz audio) of the video being transcribed
+        self._dl_locks = {n: threading.Lock() for n in MODELS}  # one download per model at a time
 
     def model_dir(self, name):
         return self.dir / name
@@ -146,9 +147,13 @@ class Engine:
             shutil.rmtree(self.model_dir(name), ignore_errors=True)
 
     def download(self, name, on_progress, stop):
-        """Fetch the ready-made CTranslate2 model (only the files we need)."""
-        if self.is_ready(name):
-            return
+        """Fetch the ready-made CTranslate2 model (only the files we need). A second call for the same model
+        (Settings "download" while a job starts) waits for the first instead of writing the same folder."""
+        with self._dl_locks[name]:
+            if not self.is_ready(name):
+                self._download(name, on_progress, stop)
+
+    def _download(self, name, on_progress, stop):
         info = MODELS[name]
         tmp = self.dir / f".{name}-download"
         tmp.mkdir(exist_ok=True)
@@ -273,7 +278,7 @@ class Engine:
         for s in segs:
             if stop.is_set():
                 raise Cancelled()
-            words += [_w(w) for w in (s.words or [])]
+            words += _real([_w(w) for w in (s.words or [])])
             if dur:
                 on_progress(min(1.0, s.end / dur), "decode", ahead(s.end))
         on_progress(1.0, "decode")
@@ -339,8 +344,7 @@ class Engine:
         )
         out = []
         for s in segs:
-            for w in s.words or []:
-                d = _w(w)
+            for d in _real([_w(w) for w in s.words or []]):
                 d["s"] = round(d["s"] + offset, 3)
                 d["e"] = round(d["e"] + offset, 3)
                 out.append(d)
@@ -358,6 +362,14 @@ HALLU = re.compile(r"(teksting|tekstet|undertekst\w*|oversatt)\s+(av|:)|takk for
 
 def _w(w):
     return {"w": w.word, "s": round(w.start, 3), "e": round(w.end, 3), "p": round(w.probability, 3)}
+
+
+MARKER_RE = re.compile(r"[<>|]|nocaptions|nospeech", re.I)  # same as segment.MARKER_RE
+
+
+def _real(words):
+    """Without the pieces of "<|nocaptions|>" the model writes as text where it gives up on a stretch."""
+    return [w for w in words if not MARKER_RE.search(w["w"])]
 
 
 FAKE_TEXT = (

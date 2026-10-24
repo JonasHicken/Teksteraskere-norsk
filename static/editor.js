@@ -655,6 +655,7 @@ class Editor {
     this.unknown.splice(i, 1);
     this.spliceRows(i, 1, 0);
     if (this.cues.length) this.select(Math.min(i, this.cues.length - 1), { seek: false });
+    else this.sel = -1;
     this.changed();
     this.undoable(t("deleted"));
   }
@@ -986,7 +987,7 @@ class Editor {
     if (!n) { toast(t("find_none")); return; }
     this.snapshot();
     this.cues.forEach((c, i) => {
-      const nt = c.text.replace(re, this.fr.value);
+      const nt = c.text.replace(re, () => this.fr.value);  // plain text, "$&" in it is not a regex code
       if (nt !== c.text) { this.setText(i, nt); c.checked = false; }
     });
     this.spellAll();

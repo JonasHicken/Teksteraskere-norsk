@@ -50,12 +50,21 @@ def core(w):
     return re.sub(r"\W+", "", t.lower())
 
 
+# Pieces of the model's own markers, written as text: NB-Whisper puts "<|nocaptions|>" where its training
+# subtitles had no text (it came out as "| > < |nocaptions | >" in a subtitle, 2026-10-24).
+MARKER_RE = re.compile(r"[<>|]|nocaptions|nospeech", re.I)
+
+
+def is_marker(text):
+    return bool(MARKER_RE.search(text))
+
+
 def clean_words(words, p):
     out, cap_next = [], False
     for w in words:
         raw = w.text
         w.text = raw.strip()
-        if not w.text:
+        if not w.text or is_marker(w.text):
             continue
         # Whisper sometimes glues a comma/period to the NEXT word (",trøndere,") - give it back
         m = re.match(r"^([,.;:!?…]+)(\S.*)$", w.text)
@@ -128,7 +137,7 @@ def expand_abbreviations(words, lang="no"):
         nxt = words[k + span] if k + span < len(words) else None
         ended = nxt is None or nxt.text.strip()[:1].isupper()
         dot = "." if m.group(2).endswith(".") and not m.group(3) and ended else ""
-        if m.group(2)[:1].isupper():
+        if not out or SENT_END.search(out[-1].text):  # capital only at the start of a sentence
             full = full[0].upper() + full[1:]
         parts = full.split()
         parts[0] = m.group(1) + parts[0]
@@ -142,6 +151,25 @@ def expand_abbreviations(words, lang="no"):
             at = end
         k += span
     return out
+
+
+# ---------------------------------------------------------------- capitals ---
+# Everyday words that are never names. The model starts every chunk of speech it hears with a capital, also
+# when the sentence goes on ("på et Det begynner", "har Du", new speaker), so mid-sentence these get a small
+# letter. Names keep theirs (Stortinget, MDG, Arbeiderpartiet are not in the list).
+LOWER_MID = set("""jeg du han hun vi dere de det den denne dette disse dem meg deg seg oss man en et ei
+    og men eller at som så da når hvis fordi mens om enn i på til med for av fra over under etter før mot hos ved
+    er var har hadde blir ble kan kunne skal skulle vil ville må måtte får fikk gjør gjorde
+    ikke også bare nå her der hva hvem hvor hvordan hvorfor hvilken hvilke ja nei altså liksom jo vel nok
+    egentlig faktisk eg ho me dei ikkje berre kva korleis kvifor kven""".split())
+
+
+def fix_capitals(words):
+    for prev, w in zip(words, words[1:]):
+        if w.text[:1].isupper() and not SENT_END.search(prev.text) and core(w) in LOWER_MID \
+                and not w.text[1:2].isupper():  # "VI" in capitals is shouting/an acronym: leave it
+            w.text = w.text[0].lower() + w.text[1:]
+    return words
 
 
 # ------------------------------------------------------- break preferences ---
@@ -351,7 +379,7 @@ def params(rules=None, **extra):
 def make_cues(raw_words, p):
     """raw_words: [{"w","s","e","p"}] -> [{"start","end","text"}] (text lines joined by \\n)."""
     words = clean_words([Word(w["w"], w["s"], w["e"], w.get("p", 1.0)) for w in raw_words], p)
-    words = expand_abbreviations(words, p.lang)
+    words = fix_capitals(expand_abbreviations(words, p.lang))
     if not words:
         return []
     cues = time_cues(build_cues(words, p), words, p)

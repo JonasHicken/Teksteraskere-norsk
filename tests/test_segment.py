@@ -277,3 +277,23 @@ def test_wrap_text_balances_two_lines():
 def test_params_ignores_unknown_keys():
     p = params({"max_chars": 37, "nonsense": 1})
     assert p.max_chars == 37 and isinstance(p, segment.P)
+
+
+def test_mid_sentence_capitals_from_the_model_are_lowered_but_names_keep_theirs():
+    """End user: words capitalised for no reason ("på et Det begynner"). The model starts every chunk it hears
+    with a capital; everyday words mid-sentence get a small letter, names keep theirs."""
+    t = text_of("Og jeg tenker også at det er på et Det begynner å bli giftig. Har Du sett Stortinget og MDG nå?")
+    assert t == "Og jeg tenker også at det er på et det begynner å bli giftig. Har du sett Stortinget og MDG nå?"
+    assert text_of("Det er bra. Vi ses.") == "Det er bra. Vi ses."  # sentence starts keep the capital
+
+
+def test_written_out_abbreviation_has_a_capital_only_at_a_sentence_start():
+    assert text_of("Vi ser F.eks. at det går. F.eks. dette.") == "Vi ser for eksempel at det går. For eksempel dette."
+    assert text_of("bra. f.eks. her") == "bra. For eksempel her"
+
+
+def test_the_models_nocaptions_marker_never_reaches_a_subtitle():
+    w = words_from("Du legger deg ikke oppi det")
+    marker = [{"w": t, "s": 0.1, "e": 0.2, "p": 0.5} for t in ("|", ">", " <", "|nocaptions", "|", ">")]
+    text = " ".join(c["text"].replace("\n", " ") for c in make_cues(marker + w, params()))
+    assert text == "Du legger deg ikke oppi det"
