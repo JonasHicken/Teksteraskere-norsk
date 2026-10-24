@@ -141,10 +141,11 @@ class Tracker:
         cap_total = lo + (hi - lo) * (1.0 if cap is None else max(p, cap))
         rate = (hi - lo) / max(1.0, sec * self.scale)              # expected progress per second
         t1, p1 = self.first
-        if phase == "decode" and p > p1 and now - t1 > 8:
+        if phase in ("decode", "rescue") and p > p1 and now - t1 > 8:
             measured = (hi - lo) * (p - p1) / (now - t1)
-            rate = measured
-            self.scale = min(4.0, max(0.25, ((hi - lo) / sec) / measured))  # applies to later phases too
+            rate = measured  # re-listening varies most (a fast debate: ~30x its estimate), so it is measured too
+            if phase == "decode":
+                self.scale = min(4.0, max(0.25, ((hi - lo) / sec) / measured))  # applies to later phases too
         # time left: rest of this phase at the current rate + later phases at the (corrected) estimate
         later = self.order[self.order.index(key) + 1:]
         eta = (hi - total) / rate + sum(self.ranges[k][2] for k in later) * self.scale

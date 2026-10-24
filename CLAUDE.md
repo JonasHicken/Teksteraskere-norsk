@@ -143,9 +143,22 @@ A more elaborate intro was built and dropped on 2026-10-09 in favour of a minima
 2. `engine.transcribe(main, rescue=True)`: decode audio → faster-whisper (int8 CPU, beam 5, word timestamps,
    `vad_filter` with VAD = threshold 0.35 / min_silence 700 / pad 500, `condition_on_previous_text=False`,
    glossary + learned words passed as `hotwords`).
-3. **Gap rescue**: text-less gaps ≥1.5 s that contain loud 1 s windows get re-transcribed without VAD; kept only
-   if no hallucination pattern (`HALLU` regex) and mean word prob ≥0.45. Marked `"r": 1`, flagged in the editor.
-   (Added because the model skipped a clearly spoken sentence — confirmed fixed on real audio.)
+3. **Gap rescue** (`Engine._rescue`, rewritten 2026-10-24): Silero VAD (`RESCUE_VAD`, threshold 0.35) finds
+   speech; every stretch of it with no word, ≥0.6 s (`speech_holes`), is transcribed again on its own (±0.6 s,
+   no VAD); kept only if no hallucination pattern (`HALLU`) and mean word prob ≥0.45, without words lying on an
+   existing word (`_overlaps`) or repeating the neighbouring word at the edge ("Og Og", `_same`). Marked
+   `"r": 1`, flagged in the editor. Before: only gaps ≥1.5 s that looked loud.
+   **Measured on Jonas's fast debate clip (4:41, 2026-10-24; "it skipped a lot of dialogue")**: the main pass
+   drops many phrases (NB-Whisper learned from condensed TV subtitles; it even writes "<|nocaptions|>" as text
+   for a stretch). The old rescue got most of them back; the new one recovered 7 more phrases in 1.0-1.3 s gaps
+   ("til staten som eier.", "Da tror jeg sånne", "og jeg har problemer med å forstå det her" ...), re-listened
+   words 141 -> 170, at about the same time (rescue ~8 min on that clip: each stretch costs a 30 s window).
+   Ruled out by measurement: `no_speech_threshold=None` (no extra speech, one more nocaptions segment); threshold
+   0.25 / 0.4 s stretches (only one-word scraps); the verbatim model (lowercase, no punctuation; Jonas: no "eh"s).
+   Still missed: overlapping speakers ("Jeg syns jo at", "på formuen sin, og vi"). A re-heard stretch can start
+   with a capital mid-sentence when its first word is not in `LOWER_MID` ("er Lønninga på et nivå").
+   The `<|nocaptions|>` pieces (`| > < |nocaptions`) are dropped in the engine (`_real`) and in `clean_words`.
+   The time estimate measures re-listening speed too (`Tracker`); its plan is `dur*speed*0.15+5`.
 4. `make_cues` → learned rules applied (`autofix.json`) → saved.
 5. Waveform peaks. Status `done` — **the video can be proofread from here** (2026-10-15).
 6. Double-check (`Worker.double_check`, after `done`): `small` model transcribes again; disagreements (ignoring

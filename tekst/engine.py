@@ -242,7 +242,7 @@ class Engine:
             out.append(("model", {"large": 25.0, "medium": 12.0}.get(name, 5.0)))
         out += [("audio", dur / 120 + 1), ("vad", dur / 90 + 1), ("decode", dur * speed)]
         if rescue:
-            out.append(("rescue", dur * speed * 0.03 + 3))
+            out.append(("rescue", dur * speed * 0.15 + 5))  # each re-heard stretch costs a 30 s window
         return out
 
     def transcribe(self, name, path, language, prompt, on_progress, stop, rescue=False):
@@ -289,44 +289,33 @@ class Engine:
         return words
 
     def _rescue(self, model, audio, words, language, prompt, stop, on_progress=None):
-        import numpy as np
+        """Re-listen to every stretch where the voice detector hears speech but the main pass wrote nothing.
+        Each stretch is transcribed on its own (with 0.6 s around it): on a short clip the model keeps phrases
+        it skipped in the long pass. Before 2026-10-24 only gaps of 1.5 s+ that looked loud were re-listened;
+        on a fast debate (Jonas's test clip) that missed 7 phrases in shorter gaps ("og jeg har problemer med
+        å forstå det her også.", "til staten som eier." ...) at about the same total time."""
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
         dur = len(audio) / SR
-        hop = SR // 20  # 50 ms loudness frames
-        fr = audio[: len(audio) // hop * hop].reshape(-1, hop)
-        rms = np.sqrt((fr.astype(np.float32) ** 2).mean(axis=1))
-        ref = float(np.percentile(rms, 90)) or 1e-9
-        gaps, prev = [], 0.0
-        for w in words + [{"s": dur, "e": dur}]:
-            if w["s"] - prev >= 1.5:
-                gaps.append((prev, w["s"]))
-            prev = max(prev, w["e"])
-        loud = rms > 0.25 * ref
-        regions = []  # stretches inside gaps that sound like speech (1 s windows, >= 40 % loud frames)
-        for gs, ge in gaps:
-            active = []
-            t = gs
-            while t < ge:
-                win = loud[int(t * 20):int(min(ge, t + 1.0) * 20)]
-                if len(win) and win.mean() >= 0.4:
-                    active.append((t, min(ge, t + 1.0)))
-                t += 0.5
-            for a0, b0 in active:
-                if regions and regions[-1][2] == gs and a0 <= regions[-1][1] + 0.01:
-                    regions[-1][1] = max(regions[-1][1], b0)
-                else:
-                    regions.append([a0, b0, gs, ge])
+        speech = [(t["start"] / SR, t["end"] / SR) for t in get_speech_timestamps(audio, VadOptions(**RESCUE_VAD))]
+        holes = speech_holes(speech, words, RESCUE_MIN)
+        have = sorted(words, key=lambda w: w["s"])
         found = []
-        for i, (r0, r1, gs, ge) in enumerate(regions):
+        for i, (a, b) in enumerate(holes):
             if stop.is_set():
                 raise Cancelled()
             if on_progress:
-                on_progress(i / len(regions), "rescue", (i + 1) / len(regions))
-            if r1 - r0 < 0.8:
-                continue
-            gs, ge = max(gs, r0 - 0.4), min(ge, r1 + 0.4)
-            a, b = max(0.0, gs - 0.2), min(dur, ge + 0.2)
-            cand = self.listen_array(model, audio[int(a * SR):int(b * SR)], a, language, prompt)
-            cand = [w for w in cand if w["s"] >= gs - 0.15 and w["e"] <= ge + 0.15]
+                on_progress(i / len(holes), "rescue", (i + 1) / len(holes))
+            c0, c1 = max(0.0, a - 0.6), min(dur, b + 0.6)
+            cand = self.listen_array(model, audio[int(c0 * SR):int(c1 * SR)], c0, language, prompt)
+            # only words inside the stretch, and none that repeats a word the main pass already has at its edge
+            cand = [w for w in cand if w["s"] >= a - 0.2 and w["e"] <= b + 0.2 and not _overlaps(have, w)]
+            # the clip's first/last word heard again right next to the same word of the main pass ("Og Og")
+            before = next((w for w in reversed(have) if w["e"] <= a + 0.05), None)
+            after = next((w for w in have if w["s"] >= b - 0.05), None)
+            if cand and after and _same(cand[-1], after):
+                cand.pop()
+            if cand and before and _same(cand[0], before):
+                cand.pop(0)
             if not cand:
                 continue
             text = " ".join(w["w"] for w in cand)
@@ -353,6 +342,49 @@ class Engine:
 
 
 SR = 16000
+# Re-listening: the voice detector finds speech; stretches of it with no text, at least RESCUE_MIN s long, are
+# transcribed again (measured on a fast debate clip, 2026-10-24: 0.6 s / threshold 0.35 recovered the most;
+# 0.4 s / 0.25 found only extra one-word scraps).
+RESCUE_VAD = {"threshold": 0.35, "min_silence_duration_ms": 300, "speech_pad_ms": 100}
+RESCUE_MIN = 0.6
+
+
+def speech_holes(speech, words, min_len=RESCUE_MIN):
+    """Stretches of speech [(start, end)] where no word was written, at least min_len s long."""
+    import bisect
+    ws = sorted(words, key=lambda w: w["s"])
+    starts = [w["s"] for w in ws]
+    holes = []
+    for s, e in speech:
+        k = bisect.bisect_left(starts, s)
+        while k > 0 and ws[k - 1]["e"] > s:  # a word that began before the stretch and runs into it
+            k -= 1
+        cur = s
+        while k < len(ws) and ws[k]["s"] < e:
+            w = ws[k]
+            if w["e"] > cur:
+                if w["s"] - cur >= min_len:
+                    holes.append((cur, w["s"]))
+                cur = max(cur, w["e"])
+            k += 1
+        if e - cur >= min_len:
+            holes.append((cur, e))
+    return holes
+
+
+def _same(a, b):
+    return re.sub(r"\W+", "", a["w"].lower()) == re.sub(r"\W+", "", b["w"].lower())
+
+
+def _overlaps(ws, w):
+    """Does word w lie mostly on top of a word in ws (sorted by start)? Then it is the same word heard again."""
+    import bisect
+    k = bisect.bisect_left([x["s"] for x in ws], w["e"])
+    for x in ws[max(0, k - 3):k]:
+        shared = min(x["e"], w["e"]) - max(x["s"], w["s"])
+        if shared > 0.5 * max(0.01, w["e"] - w["s"]):
+            return True
+    return False
 # Gentler than faster-whisper's defaults: less risk of cutting quiet or overlapping speech
 VAD = {"threshold": 0.35, "min_silence_duration_ms": 700, "speech_pad_ms": 500}
 # Typical Whisper "hallucinations" on silence/music in Norwegian training data
