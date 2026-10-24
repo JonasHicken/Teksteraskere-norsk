@@ -297,7 +297,15 @@ body.editing main { flex: 1; min-height: 0; }
 @keyframes eq-pulse { 50% { opacity: .35; } }
 .ed-actions { display: flex; gap: 8px; align-items: center; }
 
-.ed-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(400px, 1fr); }
+.ed-body {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: minmax(320px, var(--lf, 1.25fr)) 6px minmax(400px, var(--rf, 1fr));
+}
+/* the line between picture and list: drag to resize (editor.js initSplit) */
+.ed-split { cursor: col-resize; background: var(--line); touch-action: none; position: relative; }
+.ed-split::after { content: ""; position: absolute; inset: 0 -4px; }  /* easier to grab than 6 px */
+.ed-split:hover, .ed-split:focus-visible, .ed-body.resizing .ed-split { background: var(--brand); outline: none; }
+.ed-body.resizing, .ed-body.resizing * { cursor: col-resize !important; user-select: none; }
 
 /* left: the dark "studio" with picture, transport and timeline */
 .ed-left {
@@ -376,6 +384,26 @@ body.editing main { flex: 1; min-height: 0; }
   position: absolute; top: 2px; left: 4px; font-size: 10.5px; font-weight: 500; color: var(--studio-muted);
   font-variant-numeric: tabular-nums;
 }
+/* drag videos onto the window */
+.dropzone {
+  position: fixed; inset: 10px; z-index: 50; display: grid; place-items: center; pointer-events: none;
+  border: 3px dashed var(--brand); border-radius: 16px; background: color-mix(in srgb, var(--paper) 86%, transparent);
+}
+.dropzone[hidden] { display: none; }
+.dropzone div { display: grid; gap: 6px; text-align: center; }
+.dropzone strong { font-size: 24px; color: var(--brand); }
+.dropzone span { color: var(--muted); }
+
+/* speech with no subtitle: a hatched band (click to hear it); orange when the fast model heard words there */
+.timeline .hole {
+  position: absolute; top: 19px; height: 34px; cursor: pointer; border-radius: 5px;
+  background: repeating-linear-gradient(135deg, rgba(232, 93, 93, 0.30) 0 6px, rgba(232, 93, 93, 0.12) 6px 12px);
+  border: 1px dashed rgba(240, 120, 120, 0.85);
+}
+.timeline .hole.heard {
+  background: repeating-linear-gradient(135deg, rgba(240, 160, 60, 0.34) 0 6px, rgba(240, 160, 60, 0.14) 6px 12px);
+  border-color: rgba(245, 175, 80, 0.9);
+}
 .timeline .blk {
   position: absolute; top: 19px; height: 34px; overflow: hidden; cursor: pointer;
   background: #24425a; border: 1px solid #335d7e; border-radius: 5px; color: #e6edf2;
@@ -394,7 +422,7 @@ body.editing main { flex: 1; min-height: 0; }
 }
 
 /* right: review bar, find / style panel, progress, the list */
-.ed-right { display: flex; flex-direction: column; min-height: 0; background: var(--paper); border-left: 1px solid var(--line); }
+.ed-right { display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
 .reviewbar {
   display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 16px;
   background: var(--panel); border-bottom: 0; box-shadow: inset 4px 0 0 var(--cue), 0 1px 0 var(--line);
@@ -468,6 +496,15 @@ body.editing main { flex: 1; min-height: 0; }
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--cue) 60%, transparent);
 }
 .cue .ta-wrap textarea, .cue .ta-wrap textarea:focus { position: relative; z-index: 1; background: transparent; }
+/* characters per line, on the selected subtitle: right of each line (same line height as the text) */
+.ta-wrap .cc {
+  display: none; position: absolute; top: 5px; right: 6px; z-index: 2; flex-direction: column; align-items: flex-end;
+  font: 11px/23.2px var(--font); color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.ta-wrap .cc .soft { color: var(--warn); font-weight: 600; }
+.ta-wrap .cc .over { color: var(--bad); font-weight: 700; }
+.cue.sel .ta-wrap .cc { display: flex; }
+.cue.sel .ta-wrap textarea, .cue.sel .ta-wrap .hl { padding-right: 52px; }
 .cue .ta-wrap:focus-within { background: var(--panel); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ta-wrap .hl mark {
@@ -537,7 +574,8 @@ body.editing main { flex: 1; min-height: 0; }
 @media (max-width: 900px) {
   body.editing { height: auto; overflow: auto; }
   .ed-body { grid-template-columns: 1fr; }
-  .ed-right { border-left: 0; border-top: 1px solid var(--line); }
+  .ed-split { display: none; }
+  .ed-right { border-top: 1px solid var(--line); }
   .cuelist { max-height: 70vh; }
   .ed-head { flex-wrap: wrap; }
 }

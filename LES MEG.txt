@@ -21,6 +21,7 @@ AVSLUTTE
 TIPS
 - Første video laster ned talemodellen: "Best kvalitet" er 6,2 GB, "Rask" er 1 GB.
   Det skjer bare én gang. Modellen kan også lastes ned på forhånd under Innstillinger.
+- Du kan også dra videoer (eller en hel mappe) rett inn i Teksting-vinduet.
 - Legg til mange videoer og la PC-en jobbe om natten. Den holdes våken mens den jobber
   (koble til strøm!). "Best kvalitet" bruker omtrent 1,4 ganger videoens lengde
   (en video på 30 min tar ca. 45 min, litt mer på en tregere PC).
@@ -45,6 +46,14 @@ KORREKTURLESING (raskest slik)
   Spiller du samme undertekst to ganger, foreslår appen å spille den saktere.
 - Ctrl+klikk et ord i teksten for å høre bare det ordet. Ordet som sies akkurat nå, er gult mens videoen går.
 - Godkjente undertekster krymper til én grå linje, så listen viser det som gjenstår.
+- Skraverte felt på tidslinjen = noen snakker der, men ingen undertekst dekker det (modellen kan ha hoppet
+  over noe). Klikk for å høre, eller trykk Alt+T for å gå til neste. Oransje felt: den raske modellen hørte
+  ord der, og «Sett inn som undertekst» lager underteksten med dem.
+- «Den raske modellen hørte også: …» under en undertekst: ord hovedmodellen hoppet over. «Sett inn» setter
+  dem inn på riktig sted i teksten.
+- Tallene til høyre for linjene viser tegn per linje (f.eks. 38/42). Oransje: litt over grensen (greit når
+  det holder en setning samlet). Rødt: for lang.
+- Dra streken mellom bildet og listen for å gjøre bildet større. Dobbeltklikk på streken: tilbake til standard.
 - Feil trykk? «Angre» (Ctrl+Z) angrer også deling, sammenslåing og sletting. «Gjør om» = Ctrl+Y.
 - Søk og erstatt (Ctrl+F) retter et navn overalt på en gang.
 - Mangler en setning? Appen lytter automatisk på nytt der det er lyd men ingen tekst, og merker det den

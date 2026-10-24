@@ -1,4 +1,5 @@
 """The server API end to end, with fake transcription (TEKSTING_FAKE=1, set in conftest.py)."""
+import os
 import re
 import time
 import urllib.parse
@@ -172,3 +173,23 @@ def test_page_links_carry_a_version_so_updates_are_never_cached(client):
     links = re.findall(r'(?:src|href)="(/static/[^"]+)"', html)
     assert links and all(re.search(r"\?v=\d+$", l) for l in links)
     assert client.get("/").headers["cache-control"] == "no-store"
+
+
+def test_the_speech_map_is_saved_with_the_job_and_made_for_older_projects(server, client, done_pid):
+    speech = client.get(f"/api/projects/{done_pid}/speech").json()
+    assert speech and all(e > s for s, e in speech)
+    server.store._dir(done_pid).joinpath("speech.json").unlink()  # a project from before this existed
+    assert client.get(f"/api/projects/{done_pid}/speech").json() == speech
+    assert server.store.load_json(done_pid, "speech.json") == speech
+
+
+def test_dropped_files_and_folders_become_media_paths(server, tmp_path):
+    (tmp_path / "a.mp4").write_bytes(b"x")
+    (tmp_path / "notes.txt").write_text("x")
+    sub = tmp_path / "mappe"
+    sub.mkdir()
+    (sub / "b.MOV").write_bytes(b"x")
+    (sub / "c.wav").write_bytes(b"x")
+    (sub / "inner").mkdir()
+    got = server.media_paths([str(tmp_path / "a.mp4"), str(tmp_path / "notes.txt"), str(sub)])
+    assert [os.path.basename(p) for p in got] == ["a.mp4", "b.MOV", "c.wav"]

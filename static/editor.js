@@ -7,6 +7,7 @@
 const UNSURE_P = 0.5;
 const SNAP_TAIL = 0.3;   // segment.P.tail: a subtitle ends this long after its last word
 const SPEEDS = [0.75, 1, 1.25, 1.5];
+const HOLE_MIN = 0.6;    // speech this long with no subtitle is shown as "tale uten tekst" (engine.RESCUE_MIN)
 const norm = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 const FONTS = ["Arial", "Segoe UI", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Times New Roman"];
@@ -50,6 +51,8 @@ class Editor {
     this.style = { ...d.style };
     this.pauseOnType = d.pause_on_type;
     this.disagree = d.disagree || [];
+    this.lowerMid = new Set(d.lower_mid || []);  // everyday words: small letter when inserted mid-sentence
+    this.holes = [];                            // speech with no subtitle (filled in when /speech arrives)
     this.hintsV = 0;
     this.checking = !!d.meta.checking;  // the double-check still runs: its hints arrive later (sync -> loadHints)
     this.rescued = d.rescued || [];
@@ -78,6 +81,14 @@ class Editor {
     fetch(`/api/projects/${this.id}/peaks`).then((r) => r.arrayBuffer()).then((b) => {
       this.peaks = new Uint8Array(b);
       this.drawTimeline(true);
+    }).catch(() => {});
+    // where someone speaks; older videos get it computed now (a few seconds), so it may arrive a bit later
+    api("GET", `/api/projects/${this.id}/speech`).then((sp) => {
+      if (!this.alive) return;
+      this.speech = sp;
+      this.findHoles();
+      this.drawTimeline(true);
+      this.updateCounts();
     }).catch(() => {});
     this.loop();
   }
@@ -170,6 +181,7 @@ class Editor {
     this.wave = h("canvas", { class: "wave", "aria-hidden": "true" });
     this.tlLayer = h("div", { class: "tl-layer" });
     this.tipDrag = t("tip_drag").replace(/"/g, "&quot;");
+    this.tipHole = t("tip_hole").replace(/"/g, "&quot;");
     this.tl = h("div", { class: "timeline", role: "slider", "aria-label": t("timeline"), tabindex: "-1" }, this.wave, this.tlLayer);
     this.tl.addEventListener("pointerdown", (e) => this.tlDown(e));
     this.tl.addEventListener("wheel", (e) => this.tlWheel(e), { passive: false });
@@ -212,7 +224,11 @@ class Editor {
     const left = h("div", { class: "ed-left" }, this.stage, transport, this.tl);
     this.progEl = h("div", { class: "progress-line" }, h("span", { class: "pl-text" }), h("span", { class: "pl-bar" }, h("i")));
     const right = h("div", { class: "ed-right" }, this.reviewBar, this.panelBox, this.progEl, this.list);
-    v.replaceChildren(head, h("div", { class: "ed-body" }, left, right));
+    const split = h("div", { class: "ed-split", role: "separator", "aria-orientation": "vertical", tabindex: "0",
+      "aria-label": t("resize_panes"), "data-tip": t("tip_resize_panes") });
+    const body = h("div", { class: "ed-body" }, left, split, right);
+    v.replaceChildren(head, body);
+    this.initSplit(body, split);
     this.renderList();
     if (this.cues.length) this.select(0, { seek: false, scroll: false });
     this.applyStyle();
@@ -220,6 +236,48 @@ class Editor {
     let seen = null;
     try { seen = localStorage.getItem("teksting.keys"); } catch (_) { /* storage blocked */ }
     if (seen !== "closed") this.toggleKeys(true);  // open the first time, so the shortcuts get learned
+  }
+
+  // Drag the line between the picture and the list (a bigger picture helps with fast dialogue). Remembered;
+  // double-click puts it back. The list keeps at least 400 px, the picture at least 320 px.
+  initSplit(body, split) {
+    const apply = (f) => {
+      if (f == null) { body.style.removeProperty("--lf"); body.style.removeProperty("--rf"); }
+      else { body.style.setProperty("--lf", `${f}fr`); body.style.setProperty("--rf", `${1 - f}fr`); }
+      this.onResize();
+    };
+    const clampF = (f) => {
+      const w = body.clientWidth || 1;
+      return Math.min(Math.max(f, 320 / w), 1 - 406 / w);
+    };
+    let saved = null;
+    try { saved = parseFloat(localStorage.getItem("teksting.split")); } catch (_) { /* storage blocked */ }
+    if (saved > 0 && saved < 1) apply(clampF(saved));
+    const store = (f) => { try { localStorage.setItem("teksting.split", f == null ? "" : String(f)); } catch (_) { /* blocked */ } };
+    split.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      split.setPointerCapture(e.pointerId);
+      body.classList.add("resizing");
+      const rect = body.getBoundingClientRect();
+      let f = null;
+      const move = (ev) => { f = clampF((ev.clientX - rect.left) / rect.width); apply(f); };
+      const up = () => {
+        split.removeEventListener("pointermove", move);
+        body.classList.remove("resizing");
+        if (f != null) store(f);
+      };
+      split.addEventListener("pointermove", move);
+      split.addEventListener("pointerup", up, { once: true });
+    });
+    split.addEventListener("dblclick", () => { apply(null); store(null); });
+    split.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      const left = body.firstElementChild.getBoundingClientRect().width / body.clientWidth;
+      const f = clampF(left + (e.key === "ArrowLeft" ? -0.03 : 0.03));
+      apply(f);
+      store(f);
+    });
   }
 
   menu(label, items, cls, aria) {
@@ -288,10 +346,105 @@ class Editor {
     toast(this.disagree.length ? t("check_done", { n: this.disagree.length }) : t("check_none"));
   }
 
+  // ============================================================ speech without text
+  // Stretches where the voice detector hears speech but no subtitle covers it (at least HOLE_MIN s): the model
+  // skipped them, or a subtitle was deleted. Shown on the timeline; Alt+T goes to the next one.
+  findHoles() {
+    const out = [], cues = this.cues;
+    for (const [s, e] of this.speech || []) {
+      let lo = 0, hi = cues.length;  // first subtitle that could reach into [s, e] (subtitles last at most ~7 s)
+      while (lo < hi) { const m = (lo + hi) >> 1; if (cues[m].start < s - 10) lo = m + 1; else hi = m; }
+      let cur = s;
+      for (let j = lo; j < cues.length && cues[j].start < e; j++) {
+        const c = cues[j];
+        if (c.end <= cur) continue;
+        if (c.start - cur >= HOLE_MIN) out.push({ s: cur, e: c.start });
+        cur = Math.max(cur, c.end);
+      }
+      if (e - cur >= HOLE_MIN) out.push({ s: cur, e });
+    }
+    for (const g of out) {  // what the fast model heard there, if anything
+      g.extra = this.disagree.filter((d) => !d.a.trim() && d.s < g.e && d.e > g.s);
+      g.fast = g.extra.map((d) => d.b).join(" ").trim();
+    }
+    this.holes = out;
+  }
+  goHole(k) {
+    const g = this.holes[k];
+    if (!g) return;
+    this.holeAt = k;
+    this.playUntil = g.e + 0.3;
+    this.video.currentTime = Math.max(0, g.s - 0.3);
+    this.video.play().catch(() => {});
+    const msg = t("hole_toast", { t: fmtTC(g.s, 0).replace(/^0:/, "") }) + (g.fast ? " " + t("hole_fast", { b: g.fast }) : "");
+    toast(msg, [{ label: g.fast ? t("hole_insert_fast") : t("hole_insert"), run: () => this.insertHole(g) },
+      { label: t("replay"), run: () => this.goHole(this.holes.indexOf(g)) }], 12000);
+  }
+  nextHole() {
+    if (!this.holes.length) { toast(t("holes_none")); return; }
+    const tm = this.video.currentTime + 0.05;
+    const k = this.holes.findIndex((g) => g.s > tm);
+    this.goHole(k >= 0 ? k : 0);
+  }
+  // a subtitle in the stretch: with the fast model's words if it heard any, otherwise empty to type in
+  async insertHole(g) {
+    const prev = [...this.cues].reverse().find((c) => c.end <= g.s + 0.01), next = this.cues.find((c) => c.start >= g.e - 0.01);
+    const start = Math.round(Math.max(g.s, prev ? prev.end + 0.08 : 0) * 1000) / 1000;
+    const end = Math.round(Math.min(Math.max(g.e, start + 1), next ? next.start - 0.08 : g.e + 0.5) * 1000) / 1000;
+    if (end - start < 0.3) { toast(t("insert_no_room")); return; }
+    this.snapshot();
+    let text = g.fast;
+    if (text) {
+      const r = await api("POST", "/api/wrap", { text });
+      text = r.text;
+      this.disagree = this.disagree.filter((d) => !g.extra.includes(d));  // it is in the text now
+    }
+    const cue = { start, end, text };
+    this.cues.push(cue);
+    this.sort();
+    const i = this.cues.indexOf(cue);
+    this.unknown.splice(i, 0, []);
+    this.spliceRows(i, 0, 1);
+    this.spellLater(i);
+    this.select(i, { focus: true, seek: false });
+    this.changed();
+    this.undoable(t("hole_inserted"));
+  }
+
+  // The main model wrote nothing here but the fast model heard words: put them into the subtitle at that spot
+  // (after the model word that comes before it, mapped to the text as it is now).
+  async insertExtra(i, d) {
+    const c = this.cues[i];
+    if (!c) return;
+    const cw = this.cueWords(i);
+    const before = cw.ws.filter((w) => w.e <= d.s + 0.02).length;
+    let pos = 0;
+    if (before > 0 && cw.toks.length) { const m = cw.toks[this.tokenFor(cw, before - 1)]; pos = m.index + m[0].length; }
+    if (before >= cw.ws.length && cw.ws.length) pos = c.text.length;  // after the last word: at the end
+    let b = d.b.trim();
+    const head = c.text.slice(0, pos).trimEnd();
+    if (head && !/[.!?…]["»”)]*$/.test(head) && this.lowerMid.has(norm(b.split(/\s+/)[0])))
+      b = b[0].toLowerCase() + b.slice(1);  // mid-sentence: "Og" -> "og", but names keep their capital
+    let text = pos ? c.text.slice(0, pos) + " " + b + c.text.slice(pos) : b + " " + c.text;
+    text = text.replace(/ {2,}/g, " ").replace(/ +\n/g, "\n").replace(/\n +/g, "\n").trim();
+    this.snapshot();
+    const limit = this.rules.max_chars + (this.rules.char_slack ?? 4);
+    if (text.split("\n").some((l) => l.length > limit)) text = (await api("POST", "/api/wrap", { text: text.replace(/\n/g, " ") })).text;
+    this.setText(i, text);
+    this.disagree = this.disagree.filter((x) => x !== d);
+    c.checked = false;
+    this.refreshRow(i);
+    this.spellLater(i);
+    this.changed();
+    this.undoable(t("alt_inserted", { b }));
+  }
+
   // ================================================================= analysis
   disagreeFor(i) {
     const c = this.cues[i];
-    return this.disagree.filter((d) => d.s < c.end && d.e > c.start);
+    // words the main model skipped belong to the subtitle their middle falls in; between subtitles they are
+    // shown on the "speech without text" band instead (findHoles)
+    return this.disagree.filter((d) => (d.a.trim() ? d.s < c.end && d.e > c.start : (d.s + d.e) / 2 >= c.start && (d.s + d.e) / 2 < c.end));
   }
   flags(i) {
     const c = this.cues[i], R = this.rules, out = [];
@@ -358,13 +511,15 @@ class Editor {
     const ta = h("textarea", { rows: 2, spellcheck: "false" });
     ta.value = this.cues[i].text;
     const hl = h("div", { class: "hl", "aria-hidden": "true" });
+    const cc = h("div", { class: "cc", "aria-hidden": "true" });  // characters per line, next to each line
     const el = h("div", { class: "cue", role: "listitem" },
       h("div", { class: "cue-gutter", onclick: () => this.select(+el.dataset.i, { focus: true }) },
         h("span", { class: "num" }), h("span", { class: "time" })),
-      h("div", { class: "cue-body" }, h("div", { class: "ta-wrap" }, hl, ta), h("div", { class: "issues" }), h("div", { class: "tools" })),
+      h("div", { class: "cue-body" }, h("div", { class: "ta-wrap" }, hl, ta, cc), h("div", { class: "issues" }), h("div", { class: "tools" })),
       h("span", { class: "okmark", title: t("checked"), "aria-hidden": "true" }));
     el._ta = ta;
     el._hl = hl;
+    el._cc = cc;
     ta.addEventListener("focus", () => { el._orig = ta.value; if (this.sel !== +el.dataset.i) this.select(+el.dataset.i, { focus: false, scroll: false }); });
     ta.addEventListener("blur", () => { if (el._orig != null && el._orig !== ta.value) this.offerGlossary(el._orig, ta.value); el._orig = null; });
     ta.addEventListener("input", () => {
@@ -390,6 +545,9 @@ class Editor {
     el._ta.setAttribute("aria-label", t("cue_text", { n: i + 1 }));
     $(".num", el).textContent = i + 1;
     $(".time", el).textContent = fmtTC(c.start, 0).replace(/^0:/, "");
+    const max = this.rules.max_chars, soft = max + (this.rules.char_slack ?? 4);
+    el._cc.replaceChildren(...c.text.split("\n").slice(0, 3).map((l) =>
+      h("span", { class: l.length > soft ? "over" : l.length > max ? "soft" : "" }, `${l.length}/${max}`)));
     const chips = [];
     for (const [lvl, label] of this.flags(i)) chips.push(h("span", { class: "chip " + lvl }, label));
     for (const w of this.unknown[i] || []) chips.push(h("button", { class: "chip warn word", type: "button", "data-tip": t("tip_word", { w }), onclick: () => this.addWord(w) }, w, h("span", { class: "plus" }, " +")));
@@ -397,6 +555,11 @@ class Editor {
     if (uns.length) chips.push(h("span", { class: "chip unsure", "data-tip": t("tip_unsure") }, t("unsure"),
       ...uns.map((w) => h("button", { class: "chip-act", type: "button", onclick: () => this.hearWord(+el.dataset.i, w) }, w.w.replace(/[.,!?:;]+$/, "")))));
     for (const d of this.disagreeFor(i)) {
+      if (!d.a.trim()) {  // the main model wrote nothing here; the fast model heard words
+        chips.push(h("span", { class: "chip alt", "data-tip": t("tip_alt_extra") }, t("alt_extra", { b: d.b }),
+          h("button", { class: "chip-act", type: "button", onclick: () => this.insertExtra(+el.dataset.i, d) }, t("alt_insert"))));
+        continue;
+      }
       const canUse = d.a && c.text.includes(d.a);
       chips.push(h("span", { class: "chip alt", "data-tip": t("tip_alt", { a: d.a || "–" }) },
         t("alt_heard", { b: d.b || t("alt_nothing") }),
@@ -427,7 +590,9 @@ class Editor {
     const n = this.reviewLeft();
     if (this.progEl) {
       const ok = this.cues.reduce((a, c) => a + (c.checked ? 1 : 0), 0), all = this.cues.length;
-      $(".pl-text", this.progEl).textContent = t("progress", { ok, all }) + (n ? " · " + (n === 1 ? t("flags_left_1") : t("flags_left", { n })) : "");
+      const g = this.holes ? this.holes.length : 0;
+      $(".pl-text", this.progEl).textContent = t("progress", { ok, all }) + (n ? " · " + (n === 1 ? t("flags_left_1") : t("flags_left", { n })) : "")
+        + (g ? " · " + (g === 1 ? t("holes_left_1") : t("holes_left", { n: g })) : "");
       $(".pl-bar i", this.progEl).style.width = (all ? (ok / all) * 100 : 0).toFixed(1) + "%";
     }
     this.reviewBtn.textContent = n ? t("review_n", { n }) : t("review_none");
@@ -535,6 +700,7 @@ class Editor {
   undoable(msg) { toast(msg, { label: t("undo"), run: () => this.undo() }); }
   changed(structural = true) {
     this.dirty = true;
+    if (structural && this.speech) { this.findHoles(); this.updateCounts(); }
     this.status.textContent = t("saving");
     this.status.className = "savestate busy";
     clearTimeout(this.saveTimer);
@@ -1193,6 +1359,10 @@ class Editor {
         const major = s % 5 === 0;
         parts.push(`<i class="tick${major ? " major" : ""}" style="left:${px(s)}px">${major ? `<b>${fmtTC(s, 0).replace(/^0:/, "")}</b>` : ""}</i>`);
       }
+      this.holes.forEach((g, k) => {
+        if (g.e < from || g.s > to) return;
+        parts.push(`<div class="hole${g.fast ? " heard" : ""}" data-h="${k}" data-tip="${this.tipHole}" style="left:${px(g.s)}px;width:${(((g.e - g.s) / W) * width).toFixed(2)}px"></div>`);
+      });
       this.cues.forEach((c, i) => {
         if (c.end < from || c.start > to) return;
         const cls = ["blk", i === this.sel ? "sel" : "", i === this.active ? "active" : "", this.needsReview(i) ? "flag" : "", c.checked ? "ok" : ""].join(" ");
@@ -1260,6 +1430,7 @@ class Editor {
     const toTime = (x) => this.tlT0 + ((x - rect.left) / rect.width) * this.win;
     const hd = e.target.closest(".hd");
     const blk = e.target.closest(".blk");
+    const hole = e.target.closest(".hole");
     if (hd) {
       e.preventDefault();
       const i = this.sel, key = hd.dataset.e;
@@ -1315,6 +1486,7 @@ class Editor {
         this.drag = null;
         if (wasPlaying) this.video.play();
       } else if (blk) this.select(+blk.dataset.i, { focus: true });
+      else if (hole) this.goHole(+hole.dataset.h);
       else this.seek(toTime(ev.clientX));
     };
     this.tl.addEventListener("pointermove", move);
@@ -1420,6 +1592,7 @@ class Editor {
       KeyM: () => has && this.merge(this.sel),
       KeyW: () => has && this.wrap(this.sel),
       KeyN: () => this.insertAtPlayhead(),
+      KeyT: () => this.nextHole(),
       Backspace: () => has && this.remove(this.sel),
       Delete: () => has && this.remove(this.sel),
       NumpadSubtract: () => this.setSpeed(-1),

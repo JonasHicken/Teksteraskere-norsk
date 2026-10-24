@@ -128,6 +128,7 @@ class Engine:
         self._loaded = {}  # name -> model; large + small both stay loaded (~2 GB RAM), so a queue
         self.lock = threading.Lock()  # of videos doesn't reload the large model for every video
         self._audio = (None, None)  # (path, 16 kHz audio) of the video being transcribed
+        self._speech = (None, None)  # (path, speech regions) from the last re-listening pass
         self._dl_locks = {n: threading.Lock() for n in MODELS}  # one download per model at a time
 
     def model_dir(self, name):
@@ -224,6 +225,20 @@ class Engine:
             self._audio = (str(path), decode_audio(str(path), sampling_rate=SR))
         return self._audio[1]
 
+    def speech(self, path):
+        """Where someone speaks: [[start, end]] from the voice detector. The editor shows the parts of it that
+        no subtitle covers ("tale uten tekst"). Reuses the re-listening pass's result for the job just run;
+        otherwise decodes the file without touching the job's audio cache."""
+        if FAKE:
+            return _fake_speech(path)
+        if self._speech[0] == str(path):
+            return self._speech[1]
+        audio = self.cached_audio(path)
+        if audio is None:
+            from faster_whisper.audio import decode_audio
+            audio = decode_audio(str(path), sampling_rate=SR)
+        return _speech_regions(audio)
+
     def cached_audio(self, path):
         return self._audio[1] if self._audio[0] == str(path) else None
 
@@ -294,9 +309,9 @@ class Engine:
         it skipped in the long pass. Before 2026-10-24 only gaps of 1.5 s+ that looked loud were re-listened;
         on a fast debate (Jonas's test clip) that missed 7 phrases in shorter gaps ("og jeg har problemer med
         å forstå det her også.", "til staten som eier." ...) at about the same total time."""
-        from faster_whisper.vad import VadOptions, get_speech_timestamps
         dur = len(audio) / SR
-        speech = [(t["start"] / SR, t["end"] / SR) for t in get_speech_timestamps(audio, VadOptions(**RESCUE_VAD))]
+        speech = _speech_regions(audio)
+        self._speech = (self._audio[0], speech)
         holes = speech_holes(speech, words, RESCUE_MIN)
         have = sorted(words, key=lambda w: w["s"])
         found = []
@@ -347,6 +362,12 @@ SR = 16000
 # 0.4 s / 0.25 found only extra one-word scraps).
 RESCUE_VAD = {"threshold": 0.35, "min_silence_duration_ms": 300, "speech_pad_ms": 100}
 RESCUE_MIN = 0.6
+
+
+def _speech_regions(audio):
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+    return [[round(t["start"] / SR, 2), round(t["end"] / SR, 2)]
+            for t in get_speech_timestamps(audio, VadOptions(**RESCUE_VAD))]
 
 
 def speech_holes(speech, words, min_len=RESCUE_MIN):
@@ -425,9 +446,13 @@ def _fake_rescue(words):
 _FAKE_DROPPED = []
 
 
-def _fake_words(path, on_progress, stop, variant=False, drop=False):
+FAKE_UNHEARD = "Hallo, hører dere meg?".split()  # said in the long pause: only the fast model writes it
+
+
+def _fake_timeline(path, variant=False):
+    """Fake words, and the phrase in each long pause that the main model never writes."""
     dur = media_duration(path) or 60.0
-    t, k, words = 0.6, 0, []
+    t, k, words, unheard = 0.6, 0, [], []
     while t < dur - 1:
         tok = FAKE_TEXT[k % len(FAKE_TEXT)]
         if variant:
@@ -439,8 +464,32 @@ def _fake_words(path, on_progress, stop, variant=False, drop=False):
                       "p": 0.4 if tok in ("Telenor", "bærekraft") else 0.95})
         t += d + 0.05 + (0.7 if tok.endswith(".") else 0.25 if tok.endswith(",") else 0)
         if k % len(FAKE_TEXT) == len(FAKE_TEXT) - 1:
+            u = t + 1.0
+            for tok in FAKE_UNHEARD:
+                d = 0.06 * len(tok) + 0.12
+                if u + d < dur - 0.5:
+                    unheard.append({"w": " " + tok, "s": round(u, 3), "e": round(u + d, 3), "p": 0.9})
+                u += d + 0.05
             t += 4.0  # a long pause now and then
         k += 1
+    return words, unheard
+
+
+def _fake_speech(path):
+    words, unheard = _fake_timeline(path)
+    out = []
+    for w in sorted(words + unheard, key=lambda w: w["s"]):
+        if out and w["s"] - out[-1][1] < 0.6:
+            out[-1][1] = w["e"]
+        else:
+            out.append([w["s"], w["e"]])
+    return out
+
+
+def _fake_words(path, on_progress, stop, variant=False, drop=False):
+    words, unheard = _fake_timeline(path, variant)
+    if variant:
+        words = sorted(words + unheard, key=lambda w: w["s"])
     if drop:  # simulate the model skipping one sentence ("Ja. Men vi er ikke ferdige.")
         keep, gone, inside = [], [], False
         for w in words:

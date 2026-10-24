@@ -160,8 +160,28 @@ def main(t0, early=None):
         if "m" in srv:
             srv["m"].WIN["w"] = w
 
+    def on_drop(e):
+        """Files dropped on the window: pywebview gives their full paths (a web page only gets the names)."""
+        server = srv.get("m")
+        files = (e.get("dataTransfer") or {}).get("files") or []
+        paths = [f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")]
+        if not server or not paths:
+            return
+        media = server.media_paths(paths)
+        added = server.add_jobs({"paths": media})["added"] if media else []
+        skipped = sum(1 for p in paths if not Path(p).is_dir()) - len(added)
+        w.evaluate_js(f"window.tekstingDropped && tekstingDropped({len(added)}, {max(0, skipped)})")
+
+    def on_loaded():  # every page load (loading screen, then the app): listen for drops on the new page
+        try:
+            from webview.dom import DOMEventHandler
+            w.dom.document.events.drop += DOMEventHandler(on_drop, prevent_default=True, stop_propagation=False)
+        except Exception as e:
+            print("  drag and drop unavailable:", e)
+
     w.events.closing += on_closing
     w.events.shown += on_shown
+    w.events.loaded += on_loaded
     try:
         webview.start(attach, gui="edgechromium", private_mode=False, storage_path=str(DATA / "webview"),
                       icon=str(APP_DIR / "static" / "teksting.ico"))

@@ -50,6 +50,7 @@ def test_re_listening_drops_a_repeat_of_the_neighbouring_word(monkeypatch):
     import numpy as np
     from tekst import engine as E
     eng = E.Engine.__new__(E.Engine)
+    eng._audio = eng._speech = (None, None)
     main = [{"w": " strømpriser.", "s": 1.0, "e": 1.6, "p": 0.9}, {"w": " Og", "s": 4.0, "e": 4.3, "p": 0.9},
             {"w": " togene", "s": 4.3, "e": 4.7, "p": 0.9}]
     heard = [{"w": " Vi", "s": 2.0, "e": 2.3, "p": 0.9}, {"w": " venter.", "s": 2.3, "e": 3.0, "p": 0.9},

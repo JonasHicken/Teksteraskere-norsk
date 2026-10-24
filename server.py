@@ -268,6 +268,7 @@ class Worker(threading.Thread):
         tr.report("finishing", "finish", 0.0)
         try:
             peaks_for(pid)
+            store.save_json(pid, "speech.json", engine.speech(job["path"]))
         except Exception:
             traceback.print_exc()
         # Ready to proofread now: the double-check below only adds "Alternativ" hints, and the editor picks
@@ -464,6 +465,20 @@ def pick(title: str = Body("Velg videoer", embed=True)):
     return add_jobs({"paths": paths})
 
 
+MEDIA = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".webm", ".wmv", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
+
+
+def media_paths(paths):
+    """Dropped paths -> video/audio files (a dropped folder gives the media files directly inside it)."""
+    out = []
+    for p in map(Path, paths):
+        if p.is_dir():
+            out += sorted(str(f) for f in p.iterdir() if f.is_file() and f.suffix.lower() in MEDIA)
+        elif p.is_file() and p.suffix.lower() in MEDIA:
+            out.append(str(p))
+    return out
+
+
 @app.post("/api/jobs")
 def add_jobs(body: dict = Body(...)):
     s = store.settings()
@@ -576,7 +591,7 @@ def get_project(pid: str):
             "pause_on_type": s.get("pause_on_type", True), "disagree": store.load_json(pid, "disagree.json", []),
             "rescued": store.load_json(pid, "rescued.json", []),
             "autofix": store.load_json(pid, "autofix.json", []),
-            "peak_rate": PEAK_RATE,
+            "peak_rate": PEAK_RATE, "lower_mid": sorted(segment.LOWER_MID),
             # model words as [start, end, confidence, text]: uncertain-word hints and snapping in the editor
             "words": [[w["s"], w["e"], w.get("p", 1.0), w["w"].strip()] for w in store.words(pid)]}
 
@@ -693,6 +708,24 @@ def peaks(pid: str):
         return Response(peaks_for(pid).read_bytes(), media_type="application/octet-stream")
     except Exception:
         return Response(b"", media_type="application/octet-stream")
+
+
+@app.get("/api/projects/{pid}/speech")
+def speech(pid: str):
+    """Where someone speaks ([[start, end]]): saved with the job; for videos transcribed before 2026-10-24
+    computed now (decode + voice detector, ~10 s per 10 min of video) and saved."""
+    m = project(pid)
+    got = store.load_json(pid, "speech.json", None)
+    if got is None:
+        if not Path(m["path"]).exists():
+            return []
+        try:
+            got = engine.speech(m["path"])
+        except Exception:
+            traceback.print_exc()
+            return []
+        store.save_json(pid, "speech.json", got)
+    return got
 
 
 @app.post("/api/projects/{pid}/burn")

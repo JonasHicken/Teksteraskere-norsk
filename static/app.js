@@ -573,6 +573,28 @@ $("#quit").addEventListener("click", async () => {
   clearTimeout(S.pollT);
 });
 window.addEventListener("beforeunload", () => { if (S.editor && S.editor.dirty) S.editor.save(true); });
+// Drag videos (or a folder) onto the window. The app window (tekst/launch.py) gets their full paths and adds
+// them; a plain browser cannot see where a dropped file lives, so there the button is the way.
+const DROP = h("div", { class: "dropzone", hidden: true }, h("div", null, h("strong", { "data-t": "drop_here" }), h("span", { "data-t": "drop_help" })));
+document.body.append(DROP);
+let dragDepth = 0;
+const hasFiles = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes("Files");
+const dropDone = () => { dragDepth = 0; DROP.hidden = true; };
+document.addEventListener("dragenter", (e) => { if (hasFiles(e)) { dragDepth++; DROP.hidden = false; } });
+document.addEventListener("dragleave", (e) => { if (hasFiles(e) && --dragDepth <= 0) dropDone(); });
+document.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+document.addEventListener("drop", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dropDone();
+  if (!window.pywebview) toast(t("drop_browser"), null, 7000);
+});
+window.tekstingDropped = (added, skipped) => {
+  if (added) toast(t(added === 1 ? "drop_added_1" : "drop_added", { n: added }) + (skipped ? " " + t("drop_skipped", { n: skipped }) : ""));
+  else toast(t("drop_none"), null, 7000);
+  poll();
+};
+
 // The app window calls this before it closes (tekst/launch.py): the last edit, work time and place are saved first.
 window.tekstingFlush = async () => {
   const e = S.editor;

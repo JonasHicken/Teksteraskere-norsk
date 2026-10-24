@@ -54,6 +54,22 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
   "Vi tror at det skyldes den nye strategien / vi innførte tidlig på året.", where every bottom-heavy split
   breaks "den nye / strategien" or needs a line over 42 (the slack is for sentences, not for shape).
   `test_the_longer_line_is_the_bottom_one` checks exactly that rule.
+**Editor features (2026-10-24, Jonas chose 1, 2, 6, 9, 11 from a brainstorm):**
+- *Speech without text*: `speech.json` per project = voice-detector regions (`Engine.speech`, saved with the job;
+  `GET /api/projects/{pid}/speech` computes it for older videos, ~4 s per 5 min). The editor's `findHoles()`
+  subtracts the subtitles (≥ `HOLE_MIN` 0.6 s), recomputed on every structural change; hatched red bands on the
+  timeline (orange when the fast model heard words there: `disagree` entries with empty `a`), click = hear it +
+  toast with "Sett inn som undertekst"/"Lag undertekst her"; Alt+T = next; count in the progress line.
+- *Insert from the fast model*: a hint with empty `a` whose middle lies in a subtitle gets "Sett inn"
+  (`insertExtra`: placed after the model word before it, everyday first word lowered mid-sentence via
+  `lower_mid` from the server, re-wrapped if a line gets too long). Between subtitles it belongs to the band.
+- *Characters per line*: `.cc` on the selected subtitle, `38/42`; orange in the soft zone, red past it.
+- *Drag and drop*: `tekst/launch.py` registers a pywebview DOM `drop` handler on every page load; it gets
+  `pywebviewFullPath` (a web page only gets names) and calls `server.media_paths` + `add_jobs` (a folder adds
+  the media files directly inside it). The page shows a drop overlay; in a plain browser it says to use the
+  button. Verified up to the drop event; a real Explorer drag was not automated.
+- *Movable divider*: `.ed-split` between picture and list (`initSplit`), `--lf/--rf` fr values, remembered in
+  localStorage `teksting.split`, double-click resets, arrow keys move it; list ≥ 400 px, picture ≥ 320 px.
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
 
 ## Run it
