@@ -394,23 +394,35 @@ body.editing main { flex: 1; min-height: 0; }
 .dropzone strong { font-size: 24px; color: var(--brand); }
 .dropzone span { color: var(--muted); }
 
-/* speech with no subtitle: a hatched band (click to hear it); orange when the fast model heard words there */
+/* Five distinct categories on the timeline: blue = subtitle, green = checked, amber = uncertain words,
+   red hatched = speech with no text, purple = no text but the fast model heard words (hover shows them) */
 .timeline .hole {
   position: absolute; top: 19px; height: 34px; cursor: pointer; border-radius: 5px;
   background: repeating-linear-gradient(135deg, rgba(232, 93, 93, 0.30) 0 6px, rgba(232, 93, 93, 0.12) 6px 12px);
   border: 1px dashed rgba(240, 120, 120, 0.85);
 }
 .timeline .hole.heard {
-  background: repeating-linear-gradient(135deg, rgba(240, 160, 60, 0.34) 0 6px, rgba(240, 160, 60, 0.14) 6px 12px);
-  border-color: rgba(245, 175, 80, 0.9);
+  background: rgba(150, 90, 230, 0.42); border: 1px solid #b38cff; overflow: hidden; color: #f1e8ff;
 }
+.timeline .hole.heard span { display: block; font-size: 11.5px; line-height: 32px; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic; }
+.timeline .hole:hover { filter: brightness(1.3); }
+.hole-card {
+  position: fixed; z-index: 40; max-width: 380px; padding: 10px 12px; border-radius: 10px;
+  background: var(--studio-2); color: var(--studio-ink); border: 1px solid #b38cff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: grid; gap: 8px; font-size: 14px;
+}
+.hole-card small { color: #c9b2ff; font-weight: 600; }
+.hole-card q { font-style: italic; }
+.hole-card .row { display: flex; gap: 8px; }
+.hole-card button { border: 0; border-radius: 7px; padding: 5px 11px; font: 600 13px var(--font); cursor: pointer; background: #7c4dff; color: #fff; }
+.hole-card button.ghost { background: transparent; color: var(--studio-ink); border: 1px solid var(--studio-line); }
 .timeline .blk {
   position: absolute; top: 19px; height: 34px; overflow: hidden; cursor: pointer;
   background: #24425a; border: 1px solid #335d7e; border-radius: 5px; color: #e6edf2;
 }
 .timeline .blk span { display: block; font-size: 11.5px; line-height: 32px; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.timeline .blk.flag { background: #4a381f; border-color: #8a6326; }
-.timeline .blk.ok { background: #1f4234; border-color: #2f6b52; }
+.timeline .blk.flag { background: #6b4a12; border-color: #e0a030; }
+.timeline .blk.ok { background: #1d5236; border-color: #3fae74; }
 .timeline .blk.active { box-shadow: inset 0 -4px 0 var(--cue); }
 .timeline .blk.sel { border: 2px solid #8fc0ea; z-index: 2; box-shadow: 0 0 0 1px #8fc0ea; }  /* after .active: wins the shadow */
 .timeline .hd { position: absolute; top: 0; bottom: 0; width: 9px; background: #8fc0ea; cursor: ew-resize; }
@@ -528,7 +540,9 @@ body.editing main { flex: 1; min-height: 0; }
 .chip.word:hover { outline: 1px solid var(--warn); }
 .chip .plus { font-weight: 700; }
 .chip.alt, .chip.auto { display: inline-flex; gap: 6px; align-items: center; }
-.chip.alt, .chip.unsure { background: var(--warn-soft); color: var(--warn); }
+.chip.unsure { background: var(--warn-soft); color: var(--warn); }
+.chip.alt { background: #efe6ff; color: #5b2fc0; }  /* purple: what the fast model heard, as on the timeline */
+@media (prefers-color-scheme: dark) { .chip.alt { background: #2e2147; color: #c9b2ff; } }
 .chip.auto { background: var(--info-soft); color: var(--info); }
 .chip-act { border: 0; background: var(--panel); color: var(--brand); font: 600 11.5px var(--font); border-radius: 999px; padding: 0 7px; cursor: pointer; }
 

@@ -116,6 +116,7 @@ class Editor {
     clearInterval(this.workTimer);
     this.saveResume(true);
     this.flushWork(true);
+    this.closeHoleCard();
     document.removeEventListener("pointerdown", this.onActivity, true);
     document.removeEventListener("click", this.closeKeys);
     document.removeEventListener("keydown", this.onActivity, true);
@@ -184,6 +185,8 @@ class Editor {
     this.tipHole = t("tip_hole").replace(/"/g, "&quot;");
     this.tl = h("div", { class: "timeline", role: "slider", "aria-label": t("timeline"), tabindex: "-1" }, this.wave, this.tlLayer);
     this.tl.addEventListener("pointerdown", (e) => this.tlDown(e));
+    this.tl.addEventListener("pointerover", (e) => { const el = e.target.closest(".hole.heard"); if (el) this.holeCard(el); });
+    this.tl.addEventListener("pointerout", (e) => { if (e.target.closest(".hole.heard")) this.holeCardLater(); });
     this.tl.addEventListener("wheel", (e) => this.tlWheel(e), { passive: false });
 
     // header
@@ -380,6 +383,29 @@ class Editor {
     toast(msg, [{ label: g.fast ? t("hole_insert_fast") : t("hole_insert"), run: () => this.insertHole(g) },
       { label: t("replay"), run: () => this.goHole(this.holes.indexOf(g)) }], 12000);
   }
+  // Hovering a purple band: what the fast model heard, with an insert button right there
+  holeCard(el) {
+    clearTimeout(this.cardTimer);
+    const g = this.holes[+el.dataset.h];
+    if (!g || !g.fast) return;
+    if (this.card && this.card.g === g) return;
+    this.closeHoleCard();
+    const card = h("div", { class: "hole-card" },
+      h("small", null, t("hole_card_head")), h("q", null, g.fast),
+      h("div", { class: "row" },
+        h("button", { onclick: () => { this.closeHoleCard(); this.insertHole(g); } }, t("hole_insert_fast")),
+        h("button", { class: "ghost", onclick: () => this.goHole(this.holes.indexOf(g)) }, t("replay"))));
+    card.addEventListener("pointerenter", () => clearTimeout(this.cardTimer));
+    card.addEventListener("pointerleave", () => this.holeCardLater());
+    document.body.append(card);
+    const r = el.getBoundingClientRect(), cw = card.offsetWidth;
+    card.style.left = Math.max(8, Math.min(window.innerWidth - cw - 8, r.left + r.width / 2 - cw / 2)) + "px";
+    card.style.top = Math.max(8, r.top - card.offsetHeight - 8) + "px";
+    this.card = card;
+    card.g = g;
+  }
+  holeCardLater() { clearTimeout(this.cardTimer); this.cardTimer = setTimeout(() => this.closeHoleCard(), 350); }
+  closeHoleCard() { if (this.card) { this.card.remove(); this.card = null; } }
   nextHole() {
     if (!this.holes.length) { toast(t("holes_none")); return; }
     const tm = this.video.currentTime + 0.05;
@@ -1361,7 +1387,7 @@ class Editor {
       }
       this.holes.forEach((g, k) => {
         if (g.e < from || g.s > to) return;
-        parts.push(`<div class="hole${g.fast ? " heard" : ""}" data-h="${k}" data-tip="${this.tipHole}" style="left:${px(g.s)}px;width:${(((g.e - g.s) / W) * width).toFixed(2)}px"></div>`);
+        parts.push(`<div class="hole${g.fast ? " heard" : ""}" data-h="${k}" ${g.fast ? "" : `data-tip="${this.tipHole}"`} style="left:${px(g.s)}px;width:${(((g.e - g.s) / W) * width).toFixed(2)}px">${g.fast ? `<span>${g.fast.replace(/[<&]/g, (ch) => (ch === "<" ? "&lt;" : "&amp;"))}</span>` : ""}</div>`);
       });
       this.cues.forEach((c, i) => {
         if (c.end < from || c.start > to) return;
