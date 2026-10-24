@@ -2,7 +2,7 @@
 import difflib
 import re
 
-from .segment import FILLER_RE
+from .segment import FILLER_RE, Word, expand_abbreviations
 
 
 def _norm(w):
@@ -18,12 +18,22 @@ def _tokens(words):
     return out
 
 
-def disagreements(main_words, alt_words, is_word=None):
+def _written_out(words, lang):
+    """The words as the subtitles show them: abbreviations written out (segment.expand_abbreviations)."""
+    ws = expand_abbreviations([Word(w["w"].strip(), w["s"], w["e"], w.get("p", 1.0)) for w in words], lang)
+    return [{"w": " " + w.text, "s": w.start, "e": w.end, "p": w.prob} for w in ws]
+
+
+def disagreements(main_words, alt_words, is_word=None, lang=None):
     """Return [{"s","e","a","b"}]: a = main model's text, b = fast model's text for the same spot.
 
     is_word(text) -> bool (dictionary check). When given, spots where the fast model only
     produced non-words while the main model produced real words are skipped (main is almost surely right).
+    lang ("no"/"nn"): compare the words as the subtitles write them, so "f.eks." vs "for eksempel" is no
+    disagreement and a hint never offers an abbreviation.
     """
+    if lang:
+        main_words, alt_words = _written_out(main_words, lang), _written_out(alt_words, lang)
     A, B = _tokens(main_words), _tokens(alt_words)
     sm = difflib.SequenceMatcher(None, [t for t, _ in A], [t for t, _ in B], autojunk=False)
     out = []

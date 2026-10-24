@@ -62,12 +62,17 @@ def main(t0, early=None):
     first, splash, dark = early or splash_mod.early()
     if not first:
         # Teksting is already running (it holds the mutex): bring its window forward. If it is still starting,
-        # its server may not answer yet, so keep trying for a few seconds. Never start a second copy.
-        for _ in range(20):
+        # its server may not answer yet, so keep trying. If it is closing (the icon was clicked again right
+        # after closing: the old copy needs ~2.4 s to exit), its mutex comes to us when it is gone: start then.
+        for _ in range(40):
             if _show_existing():
+                os._exit(0)
+            if splash_mod.own_mutex(500):
+                print("  the previous Teksting had closed: starting")
+                splash = splash_mod.make_splash(dark)
                 break
-            time.sleep(0.5)
-        os._exit(0)
+        else:
+            os._exit(0)
     if splash and splash.hwnd:
         print(f"  stand-in window after {time.time() - t0:.1f} s")
     # No port checks here: each costs ~0.3 s when nothing answers (it did twice per start before). If something
@@ -109,13 +114,38 @@ def main(t0, early=None):
     w = webview.create_window("Teksting", html=loading_html(), x=lx, y=ly, width=lw, height=lh, min_size=(400, 500),
                               background_color="#10171d" if dark else "#edf1f4")  # --paper
 
+    closing = {"flushed": False}
+
     def on_closing():
+        if closing["flushed"]:
+            return  # second round, after the flush below: close now
         # Closing while a video is transcribing hides the window; the job finishes, then the app quits.
         server = srv.get("m")
         if server and server.busy():
             server.WIN["hidden"] = True
             threading.Timer(0.05, w.hide).start()
             return False
+        # The editor saves 0.8 s after the last key: closing sooner lost that edit (measured 2026-10-24).
+        # Keep the window until the page has saved (at most 3 s), then close.
+        threading.Thread(target=flush_then_close, daemon=True).start()
+        return False
+
+    def flush_then_close():
+        done = threading.Event()
+
+        def ask_page():
+            try:  # evaluate_js waits (up to 20 s) for a page that is still loading: never let that hold the close
+                w.evaluate_js("Promise.resolve(window.tekstingFlush ? window.tekstingFlush() : 1)", lambda _: done.set())
+            except Exception as e:
+                print("  flush before close failed:", e)
+                done.set()
+
+        threading.Thread(target=ask_page, daemon=True).start()
+        done.wait(3)
+        closing["flushed"] = True
+        if "m" in srv:
+            srv["m"].WIN["w"] = None  # closing: a new start must not "bring forward" this window (it would vanish)
+        w.destroy()
 
     def on_shown():
         w.show()  # Teksting.vbs starts pythonw hidden; Windows applies that to our first window

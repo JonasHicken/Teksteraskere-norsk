@@ -54,6 +54,25 @@ def test_video_can_be_proofread_before_the_double_check_runs(server, client, no_
     assert m["checking"] is False and m["disagree"] == len(client.get(f"/api/projects/{pid}").json()["disagree"]) > 0
 
 
+def test_a_failing_double_check_leaves_the_video_done(server, client, no_sleep, make_audio, monkeypatch):
+    """The double-check runs after the video is ready; if the fast model fails (out of memory, broken download),
+    the video must stay "done" without hints - not turn into an error."""
+    real = server.engine.transcribe
+
+    def broken(name, *a, **kw):
+        if name == "small":
+            raise MemoryError("not enough memory")
+        return real(name, *a, **kw)
+    monkeypatch.setattr(server.engine, "transcribe", broken)
+    pid = client.post("/api/jobs", json={"paths": [str(make_audio("Kort.wav", 20))]}).json()["added"][0]["id"]
+    try:
+        server.worker.process(server.store.get(pid))
+    except Exception as e:  # Worker.run would turn this into status "error"
+        pytest.fail(f"process() raised {e!r}")
+    m = server.store.get(pid)
+    assert m["status"] == "done" and m["checking"] is False and m["cues"] > 0
+
+
 def test_missing_file_is_an_error_not_a_crash(server, client, make_audio):
     p = make_audio("borte.wav", 5)
     pid = client.post("/api/jobs", json={"paths": [str(p)]}).json()["added"][0]["id"]

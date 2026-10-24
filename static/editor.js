@@ -95,10 +95,10 @@ class Editor {
   }
   flushWork(keepalive = false) {
     const s = this.workAcc;
-    if (s < 1) return;
+    if (s < 1) return Promise.resolve();
     this.workAcc = 0;
     this.workBase += s;
-    api("POST", `/api/projects/${this.id}/worktime`, { seconds: s }, keepalive ? { keepalive: true } : {}).catch(() => { this.workAcc += s; this.workBase -= s; });
+    return api("POST", `/api/projects/${this.id}/worktime`, { seconds: s }, keepalive ? { keepalive: true } : {}).catch(() => { this.workAcc += s; this.workBase -= s; });
   }
 
   async destroy() {
@@ -755,11 +755,11 @@ class Editor {
   }
   saveResume(keepalive = false) {
     clearTimeout(this.resumeTimer);
-    if (this.sel < 0 || !this.video) return;
+    if (this.sel < 0 || !this.video) return Promise.resolve();
     const sel = this.sel, tm = Math.round(this.video.currentTime * 10) / 10;
-    if (this.lastResume && this.lastResume.sel === sel && Math.abs(this.lastResume.t - tm) < 1) return;
+    if (this.lastResume && this.lastResume.sel === sel && Math.abs(this.lastResume.t - tm) < 1) return Promise.resolve();
     this.lastResume = { sel, t: tm };
-    api("POST", `/api/projects/${this.id}/resume`, { sel, t: tm }, keepalive ? { keepalive: true } : {}).catch(() => {});
+    return api("POST", `/api/projects/${this.id}/resume`, { sel, t: tm }, keepalive ? { keepalive: true } : {}).catch(() => {});
   }
 
   // ================================================================== review

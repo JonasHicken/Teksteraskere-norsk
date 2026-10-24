@@ -158,30 +158,46 @@ def dark_mode():
         return False
 
 
+def own_mutex(timeout_ms=0):
+    """Try to own the "Teksting is running" mutex (waiting up to timeout_ms). The owner keeps it for its whole
+    life; when it exits, Windows hands it over (WAIT_ABANDONED), so a start that waits gets it the moment the
+    old copy is gone - even if that copy was still shutting down when the icon was clicked again."""
+    if not _MUTEX or not _MUTEX[0]:
+        return True
+    k32 = ctypes.WinDLL("kernel32")
+    k32.WaitForSingleObject.argtypes = [ctypes.c_void_p, wintypes.DWORD]
+    k32.WaitForSingleObject.restype = wintypes.DWORD
+    return k32.WaitForSingleObject(_MUTEX[0], timeout_ms) in (0, 0x80)  # WAIT_OBJECT_0, WAIT_ABANDONED
+
+
+def make_splash(dark):
+    import os
+    if os.environ.get("TEKSTING_NO_SPLASH") == "1":
+        return None
+    icon = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "teksting.ico")
+    return Splash("#10171d" if dark else "#edf1f4", dark, icon)
+
+
 def early():
     """The first thing app mode does (server.py, before any other import): returns (first, splash, dark).
 
-    first: no other Teksting window is running (a named mutex, held for this process's life: an instant check,
-    unlike asking the port, which costs up to 0.3 s). When one is running, no stand-in window is shown;
-    tekst/launch.py brings the running one forward instead.
+    first: no other Teksting is running - this process now owns a named mutex (an instant check, unlike asking
+    the port, which costs up to 0.3 s). When one is running, no stand-in window is shown; tekst/launch.py
+    brings the running one forward, or waits for it to finish closing.
     """
     import os
-    first = True
     try:
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         k32.CreateMutexW.restype = ctypes.c_void_p
         port = os.environ.get("TEKSTING_PORT", "8765")  # one Teksting per port (a test copy on another port may run)
         _MUTEX.append(k32.CreateMutexW(None, False, "Local\\Teksting.window." + port))
-        first = ctypes.get_last_error() != 183  # ERROR_ALREADY_EXISTS
     except Exception:
         pass
+    first = own_mutex(0)
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)  # one taskbar button for both windows
     except Exception:
         pass
     dark = dark_mode()
-    splash = None
-    if first and os.environ.get("TEKSTING_NO_SPLASH") != "1":
-        icon = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "teksting.ico")
-        splash = Splash("#10171d" if dark else "#edf1f4", dark, icon)
+    splash = make_splash(dark) if first else None
     return first, splash, dark

@@ -88,3 +88,14 @@ def test_fast_model_non_words_are_skipped_when_main_is_a_real_word():
     alt = [w("bærkraf", 1.0)]
     assert disagreements(main, alt, is_word=lambda t: t.strip() == "bærekraft") == []
     assert len(disagreements(main, alt)) == 1
+
+
+def test_hints_compare_written_out_words():
+    """Subtitles never show abbreviations, so neither may a hint: "f.eks." vs "for eksempel" is no disagreement,
+    and a hint offers the written-out form (its "Bruk" button must not put "f.eks." back)."""
+    main = [w("vi", 1.0), w("har", 1.4), w("f.eks.", 1.8), w("sett", 2.4)]
+    alt = [w("vi", 1.0), w("har", 1.4), w("for", 1.8), w("eksempel", 2.0), w("sett", 2.4)]
+    assert disagreements(main, alt, lang="no") == []
+    main = [w("det", 1.0), w("er", 1.3), w("bra", 1.6)]
+    alt = [w("det", 1.0), w("er", 1.3), w("ca.", 1.6)]
+    assert [d["b"] for d in disagreements(main, alt, lang="no")] == ["cirka."]  # last word: it ended the sentence

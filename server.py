@@ -285,9 +285,13 @@ class Worker(threading.Thread):
         except Cancelled:  # deleted or retried meanwhile: the video itself is fine, just without hints
             safe_update(pid, checking=False)
             return
+        except Exception:  # the fast model failed (memory, broken download ...): same, never mark the video failed
+            traceback.print_exc()
+            safe_update(pid, checking=False)
+            return
         allow = allow_set()
         is_word = lambda w: not speller.unknown(w, job["language"], allow)  # noqa: E731
-        disagree = compare.disagreements(words, alt, is_word)
+        disagree = compare.disagreements(words, alt, is_word, lang=job["language"] or "no")
         # recovered stretches are flagged already; don't flag them twice
         disagree = [d for d in disagree if not any(r["s"] - 0.3 <= d["s"] and d["e"] <= r["e"] + 0.3 for r in rescued)]
         try:

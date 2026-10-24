@@ -572,6 +572,13 @@ $("#quit").addEventListener("click", async () => {
   clearTimeout(S.pollT);
 });
 window.addEventListener("beforeunload", () => { if (S.editor && S.editor.dirty) S.editor.save(true); });
+// The app window calls this before it closes (tekst/launch.py): the last edit, work time and place are saved first.
+window.tekstingFlush = async () => {
+  const e = S.editor;
+  if (!e || !e.alive) return 1;
+  await Promise.all([e.dirty ? e.save() : null, e.flushWork(), e.saveResume()]);
+  return 1;
+};
 
 (async function boot() {
   await poll();
