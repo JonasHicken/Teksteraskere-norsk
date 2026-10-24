@@ -155,6 +155,15 @@ NO_END_MED = set("""jeg du vi dere han hun man ikke også så bare helt veldig l
 # Good words to START a new cue/line with (new clause).
 GOOD_START = set("og men eller at som fordi hvis når mens så".split())
 UNITS = set("prosent kroner kr millioner millioner milliarder tusen år måneder uker dager timer minutter".split())
+BALANCE = 0.6         # cost per character of difference between the two lines of a cue
+BALANCE_FREE = 4      # differences up to this many characters are free
+MID_CLAUSE = 3        # extra cost of starting a new subtitle inside a clause (no punctuation, no pause)
+SHORT_CUE = 15        # a subtitle this short that stops mid-clause costs extra
+
+
+def balance_cost(a, b):
+    """Two lines over each other should be about the same length."""
+    return max(0, abs(a - b) - BALANCE_FREE) * BALANCE
 
 
 def break_cost(a, b):
@@ -200,7 +209,7 @@ def split_lines(sub, p):
         l2 = " ".join(w.text for w in sub[k:])
         if len(l1) > limit or len(l2) > limit:
             continue
-        c = (break_cost(sub[k - 1], sub[k]) + abs(len(l1) - len(l2)) * 0.15 + (1.0 if len(l1) > len(l2) else 0.0)
+        c = (break_cost(sub[k - 1], sub[k]) + balance_cost(len(l1), len(l2)) + (1.0 if len(l1) > len(l2) else 0.0)
              + over([l1, l2], p) * 5)
         if SENT_END.search(sub[k].text) and not SENT_END.search(sub[k - 1].text):
             c += 10  # a sentence's last word alone at the start of line 2 ("... regionene / våre. Spesielt ...")
@@ -242,7 +251,11 @@ def cue_cost(words, i, j, p):
         return None
     lines, lc = sp
     chars = sum(len(l) for l in lines)
-    cps = chars / max(span + p.tail, p.min_dur)
+    # Reading speed over the time the subtitle can really stay up: time_cues() keeps it on screen into the
+    # silence after the last word (until just before the next subtitle) when the text needs it.
+    room = (words[j].start - p.gap if j < len(words) else sub[-1].end + p.max_dur) - (sub[0].start - p.lead)
+    shown = max(span + p.tail, min(room, chars / p.max_cps, p.max_dur))
+    cps = chars / max(shown, p.min_dur)
     cost = 12 + 0.5 * lc + (3 if len(lines) == 2 else 0)
     if cps > p.max_cps:
         cost += (cps - p.max_cps) * 6
@@ -254,6 +267,11 @@ def cue_cost(words, i, j, p):
     cost += orphan_cost(words, i, j)
     if j < len(words):
         cost += break_cost(words[j - 1], words[j])
+        a, b = words[j - 1], words[j]
+        if not re.search(r"[.!?…,;:–—-][\"»”)]*$", a.text) and b.start - a.end < 0.3:
+            cost += MID_CLAUSE  # a new subtitle mid-clause, with no comma or pause: only when it must
+            if chars <= SHORT_CUE:
+                cost += 6  # ... and a short scrap of a clause on its own ("I dag skal || vi snakke om ...")
     return cost, lines
 
 

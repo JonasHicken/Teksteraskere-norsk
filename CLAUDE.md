@@ -39,6 +39,14 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
   share the abbreviation's time span; the dot stays only at a sentence end; the capital is kept. Words that are
   also real words (bla, mm, ol, st) are deliberately not in the table. Existing videos get it with
   "Bruk reglene på nytt".
+- **Balanced lines and natural splits (same day, second round).** `balance_cost`: 0.6 per character of
+  difference beyond 4 between the two lines (was 0.15 from 0); grammar still wins (weak-word ends +10, so
+  "den nye / strategien" is not split just to even out). `MID_CLAUSE` +3 for a new subtitle with no comma
+  or pause, +6 more if that subtitle is a scrap of 15 characters or less. Reading speed in `cue_cost` now
+  counts the pause after the last word (`room`), as `time_cues` really shows the subtitle into it: a full
+  sentence fits instead of losing its last words. Measured with a scratch harness on the samples at 3
+  speech speeds, with and without pauses: mean line difference 7.7 to 6.6, worst 24 to 18, 0 orphans,
+  0 weak line ends, 0 lines past 46. Every change has a test that fails when it is reverted (checked).
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
 
 ## Run it

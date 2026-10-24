@@ -112,16 +112,84 @@ SAMPLES = [
 ENDS = re.compile(r"[.!?…]$")
 
 
+def natural(text, per_word=0.32, pauses=True):
+    """Model words for a sample, optionally with the short pauses people make after sentences and commas."""
+    pa = {k: (0.45 if w.endswith(".") else 0.15) for k, w in enumerate(text.split()) if w[-1] in ".,"}
+    return words_from(text, per_word=per_word, pause_after=pa if pauses else None)
+
+
+# normal, fast and slow speech, with and without natural pauses
+SPEECH = [(per, pauses) for per in (0.26, 0.32, 0.40) for pauses in (True, False)]
+
+
 @pytest.mark.parametrize("text", SAMPLES)
-def test_no_word_is_cut_off_from_its_sentence(text):
+@pytest.mark.parametrize("per_word, pauses", SPEECH)
+def test_no_word_is_cut_off_from_its_sentence(text, per_word, pauses):
     """The end user's complaint: the last word of a sentence ended up alone in the next subtitle (or line)."""
-    cues = make_cues(words_from(text), params())
+    cues = make_cues(natural(text, per_word, pauses), params())
     for a, b in zip(cues, cues[1:]):
         assert not (not ENDS.search(a["text"]) and ENDS.search(b["text"].split()[0])), (a["text"], b["text"])
     for c in cues:
         lines = c["text"].split("\n")
         if len(lines) == 2:
             assert not (ENDS.search(lines[1].split()[0]) and not ENDS.search(lines[0])), c["text"]
+
+
+@pytest.mark.parametrize("per_word, pauses", SPEECH)
+def test_two_lines_are_about_the_same_length(per_word, pauses):
+    """End user: lines over each other should be about the same length (unless that would split a phrase)."""
+    diffs = []
+    for text in SAMPLES + [LONG]:
+        for c in make_cues(natural(text, per_word, pauses), params()):
+            lines = c["text"].split("\n")
+            if len(lines) == 2:
+                diffs.append(abs(len(lines[0]) - len(lines[1])))
+    assert diffs and sum(diffs) / len(diffs) <= 8, diffs
+    assert max(diffs) <= 18, diffs  # 34/16 "Vi har jobbet med dette prosjektet / i over to år nå," beats splitting "dette / prosjektet"
+
+
+@pytest.mark.parametrize("text, lines", [
+    ("Det er et resultat av mange små og store endringer i hele organisasjonen.",
+     ["Det er et resultat av mange små", "og store endringer i hele organisasjonen."]),
+    ("Nå skal vi vise dere hvordan det fungerer i praksis for kundene våre.",
+     ["Nå skal vi vise dere hvordan", "det fungerer i praksis for kundene våre."]),
+    ("Vi tror at det skyldes den nye strategien vi innførte tidlig på året.",  # not "den nye / strategien"
+     ["Vi tror at det skyldes den nye strategien", "vi innførte tidlig på året."]),
+])
+def test_line_breaks_balance_but_keep_phrases_together(text, lines):
+    assert wrap_text(text, params()).split("\n") == lines
+
+
+@pytest.mark.parametrize("text", SAMPLES + [LONG])
+@pytest.mark.parametrize("per_word, pauses", SPEECH)
+def test_subtitles_split_at_natural_places(text, per_word, pauses):
+    p = params()
+    cues = make_cues(natural(text, per_word, pauses), p)
+    assert " ".join(c["text"].replace("\n", " ") for c in cues) == text  # nothing lost, added or reordered
+    for c in cues:
+        assert all(len(l) <= p.max_chars + p.char_slack for l in c["text"].split("\n")), c["text"]
+        last = c["text"].split()[-1]
+        if c is not cues[-1]:
+            assert segment.core(last) not in segment.NO_END_STRONG or re.search(r"[.!?,]$", last), c["text"]
+            # no short scrap of a clause on its own ("I dag skal || vi snakke om ...")
+            assert len(c["text"]) > 15 or re.search(r"[.!?,]$", last), c["text"]
+
+
+def test_the_pause_after_a_sentence_counts_as_reading_time():
+    """A subtitle may stay up into the pause after it, so a full sentence fits instead of losing its end."""
+    cues = make_cues(natural(SAMPLES[3]), params())
+    assert cues[0]["text"] == "Hei og velkommen til denne videoen\nom sikkerhet på arbeidsplassen.", cues[0]
+
+
+def test_fast_speech_is_split_at_the_comma_to_keep_the_reading_speed():
+    text = "Vi har jobbet med dette prosjektet i over to år nå, og vi er veldig stolte av resultatet vi har fått."
+    p = params()
+    cues = make_cues(natural(text, per_word=0.24), p)
+    assert len(cues) >= 2 and cues[0]["text"].endswith("nå,"), [c["text"] for c in cues]
+    # This speech is itself faster than 17 characters per second, so the reading speed can't be met exactly
+    # without cutting a clause: it must stay close (in one subtitle it would be far over).
+    for c in cues:
+        assert len(c["text"].replace("\n", "")) / (c["end"] - c["start"]) <= p.max_cps * 1.1, c
 
 
 def test_a_line_may_go_a_little_over_the_limit_but_never_past_the_slack():
