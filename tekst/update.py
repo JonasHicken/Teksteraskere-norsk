@@ -155,8 +155,8 @@ def install_requirements(app_dir):
 
 def restart():
     """Start Teksting again with the same arguments (now on the new files) and end this process."""
-    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen([sys.executable] + sys.argv, close_fds=True, creationflags=flags)
+    # Same console (start.bat) or none (pythonw): a detached copy has no output at all and the web server fails
+    subprocess.Popen([sys.executable] + sys.argv, close_fds=True)
     os._exit(0)
 
 
