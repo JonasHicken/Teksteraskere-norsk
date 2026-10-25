@@ -72,6 +72,14 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
   localStorage `teksting.split`, double-click resets, arrow keys move it; list ≥ 400 px, picture ≥ 320 px.
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
 
+## Shipping updates (since 2026-10-25)
+`dev\publish.ps1` (clean tree → tests → push main + `release` branch → zip). Installed copies (`tekst/update.py`)
+read the `release` sha from the GitHub API 30 s after start and every 6 h, download that commit's zip into
+`data/update/ready` (only the files `dev/pack.ps1` ships, CRLF for scripts), and apply it at the next start at
+the top of `server.py` (old files → `data/update/previous`), install changed requirements, then restart.
+Never in a git checkout or fake mode; Settings toggle `auto_update`. Note: the restart runs the *installed*
+update.py, not the new one. Verified end to end against real GitHub in plain and `--app` mode (2026-10-25).
+
 ## Run it
 - **Users**: double-click `start.bat` once (downloads uv → Python 3.12 → packages into `runtime\` — no venv, see below,
   creates Desktop + Start-menu shortcut "Teksting" via `lag-snarveier.ps1`), then use the shortcut
