@@ -9,6 +9,14 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")              # plain downloads 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
+if __name__ == "__main__":
+    # A new version downloaded last time (tekst/update.py): put it in place before anything else is imported,
+    # then start again on the new files
+    from tekst import update
+    _app = os.path.dirname(os.path.abspath(__file__))
+    if update.apply_staged(_app, os.environ.get("TEKSTING_DATA", os.path.join(_app, "data"))):
+        update.restart()
+
 if (__name__ == "__main__" and os.name == "nt" and os.environ.get("TEKSTING_NO_BROWSER") != "1"
         and ("--app" in sys.argv or os.environ.get("TEKSTING_APP") == "1")):
     # App mode: hand over before importing anything else, so a window shows within ~0.3 s (tekst/launch.py);
@@ -35,7 +43,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from tekst import burn, compare, segment
+from tekst import burn, compare, segment, update
 from tekst.engine import MODELS, PEAK_RATE, Cancelled, Engine, compute_peaks, media_duration, peaks_from_audio
 from tekst.spell import Speller
 from tekst.learn import Learner
@@ -409,7 +417,8 @@ def state():
     jobs = list_order(store.all())
     return {"settings": store.settings(), "models": engine.status(), "jobs": jobs,
             "paused": worker.paused, "current": worker.current, "data_dir": str(DATA),
-            "glossary": store.glossary(), "now": time.time(), "time_scale": time_scale()}
+            "glossary": store.glossary(), "now": time.time(), "time_scale": time_scale(),
+            "update": update.STATUS}
 
 
 def project(pid):
@@ -1004,6 +1013,7 @@ def start_services():
     worker.start()
     exporter.start()
     threading.Thread(target=warm_speller, daemon=True).start()
+    update.watch(APP_DIR, DATA, lambda: store.settings().get("auto_update", True))
 
 
 def port_free():

@@ -194,6 +194,17 @@ function schedulePoll(ms) {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") schedulePoll(0); });
 
+// Updates (tekst/update.py): one notice per session when a new version has been downloaded
+function updateLine() {
+  const u = (S.state && S.state.update) || {};
+  return [u.version ? t("version", { v: u.version }) : t("version_dev"),
+    u.ready ? t("update_ready") : "", u.error ? t("update_failed") : ""].filter(Boolean).join(" · ");
+}
+function noticeUpdate() {
+  const u = S.state.update || {};
+  if (u.ready && S.updateShown !== u.ready) { S.updateShown = u.ready; toast(t("update_ready"), null, 12000); }
+}
+
 async function poll() {
   clearTimeout(S.pollT);
   try {
@@ -202,6 +213,7 @@ async function poll() {
     if (route().name === "settings" || Object.keys(S.dl || {}).length) S.dl = await api("GET", "/api/downloads");
     $("#offline").hidden = true;
     applyLang();
+    noticeUpdate();
     if (route().name === "jobs") updateJobs();
     if (S.editor) S.editor.sync(S.state);
     if (route().name === "settings") updateModels();
@@ -475,7 +487,8 @@ function viewSettings() {
     for (const k of ["max_chars", "char_slack", "max_cps", "min_dur", "max_dur"]) rules[k] = Number(f.get(k));
     await saveSettings({ glossary: f.get("glossary"), hotwords: f.get("hotwords") === "on",
       collapse_repeats: f.get("collapse_repeats") === "on", double_check: f.get("double_check") === "on",
-      pause_on_type: f.get("pause_on_type") === "on", burn_tools: f.get("burn_tools") === "on", rules });
+      pause_on_type: f.get("pause_on_type") === "on", burn_tools: f.get("burn_tools") === "on",
+      auto_update: f.get("auto_update") === "on", rules });
     toast(t("settings_saved"));
   } },
     h("section", null,
@@ -501,7 +514,9 @@ function viewSettings() {
       h("h2", null, t("workflow")),
       h("label", { class: "check" }, h("input", { type: "checkbox", name: "double_check", checked: st.double_check }), h("span", null, t("double_check"))),
       h("label", { class: "check" }, h("input", { type: "checkbox", name: "pause_on_type", checked: st.pause_on_type }), h("span", null, t("pause_on_type"))),
-      h("label", { class: "check" }, h("input", { type: "checkbox", name: "burn_tools", checked: st.burn_tools }), h("span", null, t("burn_tools")))),
+      h("label", { class: "check" }, h("input", { type: "checkbox", name: "burn_tools", checked: st.burn_tools }), h("span", null, t("burn_tools"))),
+      h("label", { class: "check" }, h("input", { type: "checkbox", name: "auto_update", checked: st.auto_update }), h("span", null, t("auto_update"))),
+      h("p", { class: "muted" }, updateLine())),
     h("div", { class: "form-actions" }, h("button", { class: "btn primary", type: "submit" }, t("save_settings"))));
   v.replaceChildren(
     h("section", { class: "intro" }, h("h1", null, t("settings_title"))),

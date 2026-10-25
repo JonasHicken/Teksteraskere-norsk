@@ -16,6 +16,7 @@ DEFAULT_SETTINGS = {
     "hotwords": True,              # give glossary + learned corrections to the model as hints
     "double_check": True,          # also run the fast model and flag where the two disagree
     "pause_on_type": True,         # pause the video when you start typing in the editor
+    "auto_update": True,           # download new versions from GitHub (tekst/update.py), used from the next start
     "burn_tools": False,           # show burned-in subtitle tools (Stil, Flytt opp, video with text); off = SRT only
     "rules": {"max_chars": 42, "char_slack": 4, "max_cps": 17.0, "min_dur": 1.0, "max_dur": 7.0},
     "style": {},                   # burned-in subtitle look (see burn.DEFAULT_STYLE)

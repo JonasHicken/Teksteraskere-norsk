@@ -7,5 +7,6 @@ dev/fakedata/
 __pycache__/
 *.pyc
 *.log
+version.txt
 dev/loading_preview.html
 .claude/

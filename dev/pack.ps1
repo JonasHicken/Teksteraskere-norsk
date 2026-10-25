@@ -27,6 +27,10 @@ try {
     $entry = $archive.CreateEntry("Teksting/$rel")   # forward slashes, one top folder
     $s = $entry.Open(); $s.Write($bytes, 0, $bytes.Length); $s.Close()
   }
+  # which commit this is, so the app's updater (tekst/update.py) knows what it runs
+  $sha = (git -C $root rev-parse HEAD).Trim()
+  $entry = $archive.CreateEntry('Teksting/version.txt')
+  $s = $entry.Open(); $b = [Text.Encoding]::ASCII.GetBytes($sha); $s.Write($b, 0, $b.Length); $s.Close()
 } finally { $archive.Dispose() }
 
 Write-Host "Built $zip ($($files.Count) files, $([math]::Round((Get-Item $zip).Length / 1KB)) KB)"
