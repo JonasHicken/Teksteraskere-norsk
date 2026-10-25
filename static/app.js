@@ -198,11 +198,13 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function updateLine() {
   const u = (S.state && S.state.update) || {};
   return [u.version ? t("version", { v: u.version }) : t("version_dev"),
-    u.ready ? t("update_ready") : "", u.error ? t("update_failed") : ""].filter(Boolean).join(" · ");
+    u.ready ? t("update_ready") : "", u.rolled_back ? t("update_rolled_back", { v: u.rolled_back }) : "",
+    u.error ? t("update_failed") : ""].filter(Boolean).join(" · ");
 }
 function noticeUpdate() {
   const u = S.state.update || {};
   if (u.ready && S.updateShown !== u.ready) { S.updateShown = u.ready; toast(t("update_ready"), null, 12000); }
+  if (u.rolled_back && !S.rollbackShown) { S.rollbackShown = true; toast(t("update_rolled_back", { v: u.rolled_back }), null, 20000); }
 }
 
 async function poll() {

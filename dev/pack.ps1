@@ -6,8 +6,8 @@ $dist = Join-Path $root 'dist'
 $zip = Join-Path $dist 'Teksting.zip'
 
 $files = @('server.py', 'requirements.txt', 'start.bat', 'Teksting.vbs', 'lag-snarveier.ps1', 'LES MEG.txt')
-$files += Get-ChildItem (Join-Path $root 'tekst') -File -Filter *.py | ForEach-Object { "tekst/$($_.Name)" }
-$files += Get-ChildItem (Join-Path $root 'static') -File | ForEach-Object { "static/$($_.Name)" }
+# The files in git under tekst/ (Python only) and static/: the same rule as the updater (tekst/update.py app_file)
+$files += git -C $root ls-files tekst static | Where-Object { ($_ -like 'static/*') -or ($_ -like '*.py') }
 
 New-Item -ItemType Directory -Force $dist | Out-Null
 if (Test-Path $zip) { Remove-Item $zip }
@@ -29,6 +29,8 @@ try {
   }
   # which commit this is, so the app's updater (tekst/update.py) knows what it runs
   $sha = (git -C $root rev-parse HEAD).Trim()
+  # built from uncommitted code: not a published version, so the updater replaces it with the release
+  if (git -C $root status --porcelain -- $files) { $sha += '-local' }
   $entry = $archive.CreateEntry('Teksting/version.txt')
   $s = $entry.Open(); $b = [Text.Encoding]::ASCII.GetBytes($sha); $s.Write($b, 0, $b.Length); $s.Close()
 } finally { $archive.Dispose() }

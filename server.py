@@ -11,11 +11,19 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
 if __name__ == "__main__":
     # A new version downloaded last time (tekst/update.py): put it in place before anything else is imported,
-    # then start again on the new files
-    from tekst import update
-    _app = os.path.dirname(os.path.abspath(__file__))
-    if update.apply_staged(_app, os.environ.get("TEKSTING_DATA", os.path.join(_app, "data"))):
-        update.restart()
+    # then start again on the new files. Whatever goes wrong there, Teksting still starts.
+    try:
+        from tekst import update
+        _app = os.path.dirname(os.path.abspath(__file__))
+        _req = os.path.join(_app, "requirements.txt")
+        _old_req = open(_req, "rb").read() if os.path.exists(_req) else b""
+        if update.at_start(_app, os.environ.get("TEKSTING_DATA", os.path.join(_app, "data"))):
+            update.restart(_app, _old_req)
+    except Exception as _e:
+        try:
+            update._say(os.environ.get("TEKSTING_DATA", os.path.join(_app, "data")), f"  update at start failed: {_e!r}")
+        except Exception:
+            pass
 
 if (__name__ == "__main__" and os.name == "nt" and os.environ.get("TEKSTING_NO_BROWSER") != "1"
         and ("--app" in sys.argv or os.environ.get("TEKSTING_APP") == "1")):
@@ -460,6 +468,8 @@ LAST_SEEN = [time.time()]
 @app.get("/api/state")
 def get_state():
     LAST_SEEN[0] = time.time()
+    if not APP_LOADED.is_set():
+        update.confirm(DATA)  # this version works: an update just put in place is kept
     APP_LOADED.set()
     return {**state(), "app_mode": APP_MODE}
 
@@ -1013,7 +1023,7 @@ def start_services():
     worker.start()
     exporter.start()
     threading.Thread(target=warm_speller, daemon=True).start()
-    update.watch(APP_DIR, DATA, lambda: store.settings().get("auto_update", True))
+    update.watch(APP_DIR, DATA, lambda: update.wanted(DATA))
 
 
 def port_free():
