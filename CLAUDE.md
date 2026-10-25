@@ -85,6 +85,10 @@ read the `release` sha from the GitHub API 30 s after start and every 6 h, downl
 the top of `server.py` (old files → `data/update/previous`), install changed requirements, then restart.
 Never in a git checkout or fake mode; Settings toggle `auto_update`. Note: the restart runs the *installed*
 update.py, not the new one. Verified end to end against real GitHub in plain and `--app` mode (2026-10-25).
+Safety (bug check 2026-10-25): skipped while another copy runs (mutex `Local\Teksting.window.<port>`); release
+read via git refs (no API limit); never backwards (compare API, best effort; undo a release with `git revert` +
+publish); a version that never reaches the first `/api/state` is rolled back at the following start and its sha
+goes to `data/update/skip.txt`; the app shows a one-time notice. Steps are logged to `data/teksting.log`.
 
 ## Run it
 - **Users**: double-click `start.bat` once (downloads uv → Python 3.12 → packages into `runtime\` — no venv, see below,
