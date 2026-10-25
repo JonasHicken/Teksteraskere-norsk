@@ -993,7 +993,7 @@ def open_when_ready(url):
 
 
 def busy():
-    return bool(worker.current or exporter.current or any(
+    return bool(worker.current or exporter.current or worker.downloading or any(
         (m["status"] == "queued" and not worker.paused) or (m.get("export") or {}).get("status") in ("queued", "running")
         for m in store.all()))
 

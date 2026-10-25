@@ -212,7 +212,8 @@ async function poll() {
   try {
     S.state = await api("GET", "/api/state");
     if (S.state.now) S.skew = S.state.now - Date.now() / 1000;
-    if (route().name === "settings" || Object.keys(S.dl || {}).length) S.dl = await api("GET", "/api/downloads");
+    if (route().name === "settings" || Object.keys(S.dl || {}).length || (route().name === "jobs" && missingModels().length))
+      S.dl = await api("GET", "/api/downloads");
     $("#offline").hidden = true;
     applyLang();
     noticeUpdate();
@@ -278,6 +279,7 @@ function viewJobs() {
     h("section", { class: "intro" },
       h("h1", null, t("jobs_title")),
       h("p", { class: "lead" }, t("jobs_lead"))),
+    h("div", { id: "modelnotice" }),
     h("div", { class: "addbar" },
       h("button", { class: "btn primary big", type: "button", id: "add", onclick: pickFiles }, t("add_videos")),
       h("label", { class: "field", "data-tip": t("tip_quality") }, h("span", null, t("quality")), modelSel),
@@ -413,7 +415,46 @@ function jobRow(j) {
     h("div", { class: "job-actions" }, actions));
 }
 
+// First start: the speech models are not on this PC yet. Say so before the first video, with a button to fetch
+// them now (they are also fetched by the first video). Gone once they are downloaded.
+function missingModels() {
+  if (!S.state) return [];
+  const st = S.state.settings, need = [st.model];
+  if (st.double_check && st.model !== "small") need.push("small");
+  return need.filter((n) => S.state.models[n] && !S.state.models[n].ready);
+}
+function updateModelNotice() {
+  const box = $("#modelnotice");
+  if (!box) return;
+  const miss = missingModels();
+  if (!miss.length) { box.replaceChildren(); return; }
+  const models = S.state.models, dl = S.dl || {};
+  const total = miss.reduce((a, n) => a + models[n].size, 0);
+  const got = miss.reduce((a, n) => a + (dl[n] || 0) * models[n].size, 0);
+  const going = miss.some((n) => dl[n] != null);
+  const busy = !!S.state.current;  // a video is running: it downloads what it needs itself
+  const names = miss.map((n) => t("model_notice_item", { m: t("model_" + n), size: fmtGB(models[n].size) })).join(" + ");
+  box.replaceChildren(h("div", { class: "model-notice", role: "status" },
+    h("strong", null, t("model_notice_title")),
+    h("p", null, t("model_notice_body", { names })),
+    going
+      ? h("div", { class: "model-dl" }, h("span", null, t("st_downloading_short", { done: fmtGB(got), total: fmtGB(total) })),
+          h("div", { class: "bar" }, h("span", { style: `width:${Math.round(got / total * 100)}%` })),
+          h("span", { class: "muted" }, t("model_notice_keep_open")))
+      : h("div", { class: "model-notice-actions" },
+          h("button", { class: "btn", type: "button", disabled: busy, onclick: async (e) => {
+            e.target.disabled = true;
+            try {
+              for (const n of miss) await api("POST", `/api/models/${n}/download`);
+              S.dl = await api("GET", "/api/downloads");
+            } catch (err) { toast(err.message); }
+            poll();
+          } }, t("model_notice_button", { size: fmtGB(total) })),
+          h("span", { class: "muted" }, t("model_notice_or")))));
+}
+
 function updateJobs() {
+  updateModelNotice();
   const list = $("#joblist");
   if (!list || !S.state) return;
   const jobs = S.state.jobs;

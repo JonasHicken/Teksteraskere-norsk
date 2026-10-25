@@ -384,6 +384,16 @@ body.editing main { flex: 1; min-height: 0; }
   position: absolute; top: 2px; left: 4px; font-size: 10.5px; font-weight: 500; color: var(--studio-muted);
   font-variant-numeric: tabular-nums;
 }
+/* first start: the speech models still have to be downloaded */
+.model-notice {
+  display: grid; gap: 8px; margin: 0 0 18px; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--brand); background: color-mix(in srgb, var(--brand) 9%, var(--paper));
+}
+.model-notice strong { font-size: 16px; }
+.model-notice p { margin: 0; }
+.model-notice-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.model-notice .model-dl { display: grid; gap: 6px; max-width: 520px; }
+
 /* drag videos onto the window */
 .dropzone {
   position: fixed; inset: 10px; z-index: 50; display: grid; place-items: center; pointer-events: none;
