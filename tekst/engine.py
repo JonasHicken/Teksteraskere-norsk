@@ -307,7 +307,7 @@ class Engine:
         """Re-listen to every stretch where the voice detector hears speech but the main pass wrote nothing.
         Each stretch is transcribed on its own (with 0.6 s around it): on a short clip the model keeps phrases
         it skipped in the long pass. Before 2026-10-24 only gaps of 1.5 s+ that looked loud were re-listened;
-        on a fast debate (Jonas's test clip) that missed 7 phrases in shorter gaps ("og jeg har problemer med
+        on a fast debate (the owner's test clip) that missed 7 phrases in shorter gaps ("og jeg har problemer med
         å forstå det her også.", "til staten som eier." ...) at about the same total time."""
         dur = len(audio) / SR
         speech = _speech_regions(audio)

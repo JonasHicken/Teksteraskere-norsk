@@ -54,7 +54,7 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
   "Vi tror at det skyldes den nye strategien / vi innførte tidlig på året.", where every bottom-heavy split
   breaks "den nye / strategien" or needs a line over 42 (the slack is for sentences, not for shape).
   `test_the_longer_line_is_the_bottom_one` checks exactly that rule.
-**Editor features (2026-10-24, Jonas chose 1, 2, 6, 9, 11 from a brainstorm):**
+**Editor features (2026-10-24, the owner chose 1, 2, 6, 9, 11 from a brainstorm):**
 - *Speech without text*: `speech.json` per project = voice-detector regions (`Engine.speech`, saved with the job;
   `GET /api/projects/{pid}/speech` computes it for older videos, ~4 s per 5 min). The editor's `findHoles()`
   subtracts the subtitles (≥ `HOLE_MIN` 0.6 s), recomputed on every structural change; hatched red bands on the
@@ -71,6 +71,12 @@ Line breaks avoid ending a line on weak words (articles, prepositions, adjective
 - *Movable divider*: `.ed-split` between picture and list (`initSplit`), `--lf/--rf` fr values, remembered in
   localStorage `teksting.split`, double-click resets, arrow keys move it; list ≥ 400 px, picture ≥ 320 px.
 All tunables: `tekst/segment.py` class `P`; user-editable subset in Settings → "Regler for undertekster".
+
+## The repo is public
+Everything committed (code, comments, this file, commit messages) is visible to anyone, and the `release` branch
+ships straight to the end user. Keep it professional and privacy-safe: no names, employers, emails, user paths,
+real transcripts or client videos; synthetic test data only; refer to "the owner" and "the end user".
+Check `git diff --cached` before each commit.
 
 ## Shipping updates (since 2026-10-25)
 `dev\publish.ps1` (clean tree → tests → push main + `release` branch → zip). Installed copies (`tekst/update.py`)
@@ -172,13 +178,13 @@ A more elaborate intro was built and dropped on 2026-10-09 in favour of a minima
    no VAD); kept only if no hallucination pattern (`HALLU`) and mean word prob ≥0.45, without words lying on an
    existing word (`_overlaps`) or repeating the neighbouring word at the edge ("Og Og", `_same`). Marked
    `"r": 1`, flagged in the editor. Before: only gaps ≥1.5 s that looked loud.
-   **Measured on Jonas's fast debate clip (4:41, 2026-10-24; "it skipped a lot of dialogue")**: the main pass
+   **Measured on the owner's fast debate clip (4:41, 2026-10-24; "it skipped a lot of dialogue")**: the main pass
    drops many phrases (NB-Whisper learned from condensed TV subtitles; it even writes "<|nocaptions|>" as text
    for a stretch). The old rescue got most of them back; the new one recovered 7 more phrases in 1.0-1.3 s gaps
    ("til staten som eier.", "Da tror jeg sånne", "og jeg har problemer med å forstå det her" ...), re-listened
    words 141 -> 170, at about the same time (rescue ~8 min on that clip: each stretch costs a 30 s window).
    Ruled out by measurement: `no_speech_threshold=None` (no extra speech, one more nocaptions segment); threshold
-   0.25 / 0.4 s stretches (only one-word scraps); the verbatim model (lowercase, no punctuation; Jonas: no "eh"s).
+   0.25 / 0.4 s stretches (only one-word scraps); the verbatim model (lowercase, no punctuation; owner: no "eh"s).
    Still missed: overlapping speakers ("Jeg syns jo at", "på formuen sin, og vi"). A re-heard stretch can start
    with a capital mid-sentence when its first word is not in `LOWER_MID` ("er Lønninga på et nivå").
    The `<|nocaptions|>` pieces (`| > < |nocaptions`) are dropped in the engine (`_real`) and in `clean_words`.

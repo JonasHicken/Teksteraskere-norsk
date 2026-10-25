@@ -1,4 +1,4 @@
-# Builds dist\Teksting.zip for the friend: code only, CRLF for .bat/.vbs/.ps1/.txt.
+# Builds dist\Teksting.zip for the end user: code only, CRLF for .bat/.vbs/.ps1/.txt.
 # Run: powershell -ExecutionPolicy Bypass -File dev\pack.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
