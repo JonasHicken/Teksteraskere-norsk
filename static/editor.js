@@ -117,6 +117,7 @@ class Editor {
     this.saveResume(true);
     this.flushWork(true);
     this.closeHoleCard();
+    if (this.closeFeedback) this.closeFeedback();
     document.removeEventListener("pointerdown", this.onActivity, true);
     document.removeEventListener("click", this.closeKeys);
     document.removeEventListener("keydown", this.onActivity, true);
@@ -218,7 +219,7 @@ class Editor {
         this.reviewBtn,
         h("button", { class: "btn small", type: "button", onclick: () => this.togglePanel("find"), "data-tip": t("tip_find") }, t("find_replace")),
         this.burnTools ? h("button", { class: "btn small", type: "button", "data-tip": t("tip_style"), onclick: () => this.togglePanel("style") }, t("style")) : null,
-        exportBtn, moreMenu));
+        exportBtn, moreMenu, this.feedbackButton()));
 
     // right column
     this.reviewBar = h("div", { class: "reviewbar", hidden: true });
@@ -281,6 +282,27 @@ class Editor {
       apply(f);
       store(f);
     });
+  }
+
+  // Feedback for the owner, deliberately quiet: faded until hovered, a small pop-up that remembers where you are
+  feedbackButton() {
+    const where = () => ({ video: this.meta.name, cue: this.sel >= 0 ? this.sel + 1 : null, time: this.video.currentTime });
+    const pop = h("div", { class: "fb-pop", hidden: true, role: "dialog", "aria-label": t("fb_title") });
+    const box = feedbackBox({ where, compact: true, onSaved: () => close() });
+    const close = () => { pop.hidden = true; document.removeEventListener("pointerdown", outside, true); };
+    const outside = (e) => { if (!wrap.contains(e.target)) close(); };
+    pop.append(h("div", { class: "fb-pop-head" }, h("strong", null, t("fb_title")),
+      h("span", { class: "muted" }, t("fb_editor_help"))), box.el);
+    pop.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
+    const btn = h("button", { class: "btn small quiet fb-btn", type: "button", "data-tip": t("tip_feedback"), onclick: () => {
+      if (!pop.hidden) { close(); return; }
+      pop.hidden = false;
+      document.addEventListener("pointerdown", outside, true);
+      box.ta.focus();
+    } }, t("fb_button"));
+    const wrap = h("div", { class: "fb-wrap" }, btn, pop);
+    this.closeFeedback = close;
+    return wrap;
   }
 
   menu(label, items, cls, aria) {
@@ -1580,6 +1602,7 @@ class Editor {
     toast(t("speed_now", { r: num(SPEEDS[k], 2) }), null, 1200);
   }
   onKey(e) {
+    if (e.target.closest && e.target.closest(".fb-pop")) return;
     const tag = e.target.tagName;
     const typing = tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT";
     if ($("#dialog").open) return;

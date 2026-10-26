@@ -44,6 +44,7 @@ import threading
 import traceback
 import urllib.parse
 import urllib.request
+import uuid
 import webbrowser
 from pathlib import Path
 
@@ -822,6 +823,74 @@ def open_folder(path: str = Body(..., embed=True)):
             subprocess.Popen(["explorer", "/select,", str(p)])
         else:
             os.startfile(str(folder))  # noqa
+    return {"ok": True}
+
+
+# ------------------------------------------------------------- feedback ---
+# Notes for the owner, kept in data/feedback.json. Nothing is sent from here: the user sends them by email
+# (their own mail program opens with the text) or copies them into a message.
+FEEDBACK_LOCK = threading.Lock()
+
+
+def feedback_notes():
+    try:
+        notes = json.loads((DATA / "feedback.json").read_text(encoding="utf-8"))
+        return notes if isinstance(notes, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def save_feedback_notes(notes):
+    DATA.mkdir(parents=True, exist_ok=True)
+    tmp = DATA / "feedback.json.tmp"
+    tmp.write_text(json.dumps(notes, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(DATA / "feedback.json")
+
+
+@app.get("/api/feedback")
+def get_feedback():
+    return [n for n in feedback_notes() if not n.get("sent")]
+
+
+@app.post("/api/feedback")
+def add_feedback(body: dict = Body(...)):
+    text = str(body.get("text") or "").strip()[:5000]
+    if not text:
+        raise HTTPException(400, "empty")
+    where = body.get("where") if isinstance(body.get("where"), dict) else {}
+    note = {"id": uuid.uuid4().hex[:10], "t": time.time(), "text": text,
+            "where": {k: where[k] for k in ("video", "cue", "time") if k in where}, "version": update.STATUS["version"]}
+    with FEEDBACK_LOCK:
+        save_feedback_notes(feedback_notes() + [note])
+    return get_feedback()
+
+
+@app.delete("/api/feedback/{fid}")
+def delete_feedback(fid: str):
+    with FEEDBACK_LOCK:
+        save_feedback_notes([n for n in feedback_notes() if n.get("id") != fid])
+    return get_feedback()
+
+
+@app.post("/api/feedback/sent")
+def feedback_sent(ids: list = Body(..., embed=True)):
+    """Sent: kept in the file (nothing is lost), but no longer listed."""
+    with FEEDBACK_LOCK:
+        save_feedback_notes([{**n, "sent": time.time()} if n.get("id") in ids else n for n in feedback_notes()])
+    return get_feedback()
+
+
+@app.post("/api/feedback/email")
+def feedback_email(subject: str = Body(...), body: str = Body(...)):
+    """Open the user's own mail program with a new message (no recipient: they choose who gets it)."""
+    url = "mailto:?subject=" + urllib.parse.quote(subject) + "&body=" + urllib.parse.quote(body)
+    try:
+        if os.name == "nt":
+            os.startfile(url)  # noqa
+        else:
+            webbrowser.open(url)
+    except OSError:
+        raise HTTPException(409, "no mail program")
     return {"ok": True}
 
 

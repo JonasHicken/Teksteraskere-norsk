@@ -193,3 +193,18 @@ def test_dropped_files_and_folders_become_media_paths(server, tmp_path):
     (sub / "inner").mkdir()
     got = server.media_paths([str(tmp_path / "a.mp4"), str(tmp_path / "notes.txt"), str(sub)])
     assert [os.path.basename(p) for p in got] == ["a.mp4", "b.MOV", "c.wav"]
+
+
+def test_feedback_is_kept_locally_until_marked_sent(client, server):
+    (server.DATA / "feedback.json").unlink(missing_ok=True)
+    assert client.post("/api/feedback", json={"text": "  "}).status_code == 400
+    notes = client.post("/api/feedback", json={"text": "Linjene brytes rart",
+                                               "where": {"video": "a.mp4", "cue": 12, "time": 83.2, "bogus": 1}}).json()
+    assert [n["text"] for n in notes] == ["Linjene brytes rart"]
+    assert notes[0]["where"] == {"video": "a.mp4", "cue": 12, "time": 83.2}
+    second = client.post("/api/feedback", json={"text": "Mer"}).json()[1]
+    left = client.post("/api/feedback/sent", json={"ids": [notes[0]["id"]]}).json()
+    assert [n["text"] for n in left] == ["Mer"]
+    assert len(server.feedback_notes()) == 2, "sent notes stay in the file"
+    assert client.delete(f"/api/feedback/{second['id']}").json() == []
+    assert len(server.feedback_notes()) == 1

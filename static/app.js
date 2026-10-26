@@ -194,6 +194,90 @@ function schedulePoll(ms) {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") schedulePoll(0); });
 
+// ---- feedback for the owner: saved here, sent by the user (email or copy), never uploaded by the app
+function feedbackBox({ where, compact, onSaved } = {}) {
+  const ta = h("textarea", { class: "fb-text", rows: compact ? 4 : 3, maxlength: 5000, placeholder: t(compact ? "fb_ph_editor" : "fb_ph") });
+  const save = h("button", { class: "btn small primary", type: "button", onclick: async () => {
+    const text = ta.value.trim();
+    if (!text) { ta.focus(); return; }
+    save.disabled = true;
+    try {
+      S.feedback = await api("POST", "/api/feedback", { text, where: where ? where() : {} });
+      ta.value = "";
+      toast(t(compact ? "fb_saved_editor" : "fb_saved"));
+      if (onSaved) onSaved();
+      updateFeedbackList();
+    } catch (e) { toast(e.message); }
+    save.disabled = false;
+  } }, t("fb_save"));
+  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save.click(); } });
+  return { el: h("div", { class: "fb-box" }, ta, h("div", { class: "fb-row" }, save, h("span", { class: "muted fb-hint" }, t("fb_ctrl_enter")))), ta };
+}
+
+function feedbackText(notes) {
+  const v = (S.state.update || {}).version;
+  const head = t("fb_mail_head") + (v ? " (" + t("version", { v }) + ")" : "");
+  return head + "\n\n" + notes.map((n) => {
+    const w = n.where || {}, bits = [new Date(n.t * 1000).toLocaleString(LANG === "nb" ? "nb-NO" : "en-GB", { dateStyle: "short", timeStyle: "short" })];
+    if (w.video) bits.push(w.video);
+    if (w.cue) bits.push(t("fb_cue", { n: w.cue, tc: fmtTC(w.time || 0, 0) }));
+    return "— " + bits.join(" · ") + "\n" + n.text;
+  }).join("\n\n") + "\n";
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (_) { /* older WebView: below */ }
+  const ta = h("textarea", { style: "position:fixed;opacity:0" }, text);
+  document.body.append(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  return ok;
+}
+
+function askMarkSent(notes) {
+  toast(t("fb_mark_q"), { label: t("fb_mark_yes"), run: async () => {
+    S.feedback = await api("POST", "/api/feedback/sent", { ids: notes.map((n) => n.id) });
+    updateFeedbackList();
+  } }, 20000);
+}
+
+async function loadFeedback() {
+  try { S.feedback = await api("GET", "/api/feedback"); } catch (_) { S.feedback = []; }
+  updateFeedbackList();
+}
+
+function updateFeedbackList() {
+  const box = $("#fblist");
+  if (!box) return;
+  const notes = S.feedback || [];
+  if (!notes.length) { box.replaceChildren(); return; }
+  const send = async () => {
+    const text = feedbackText(notes);
+    const long = text.length > 1800;  // mail links get cut off when long: then the text goes on the clipboard
+    if (long) await copyText(text);
+    try {
+      await api("POST", "/api/feedback/email", { subject: t("fb_mail_subject"), body: long ? t("fb_mail_paste") : text });
+      if (long) toast(t("fb_long_copied"), null, 12000);
+      askMarkSent(notes);
+    } catch (_) { toast(t("fb_no_mail"), null, 9000); }
+  };
+  const copy = async () => {
+    if (await copyText(feedbackText(notes))) { toast(t("fb_copied")); askMarkSent(notes); } else toast(t("fb_copy_failed"));
+  };
+  box.replaceChildren(
+    h("p", { class: "fb-count" }, t(notes.length === 1 ? "fb_waiting_1" : "fb_waiting", { n: notes.length })),
+    h("ul", { class: "fb-notes" }, notes.map((n) => h("li", null,
+      h("span", { class: "fb-note-text" }, n.text),
+      n.where && n.where.cue ? h("span", { class: "muted fb-note-where" }, (n.where.video ? n.where.video + " · " : "") + t("fb_cue", { n: n.where.cue, tc: fmtTC(n.where.time || 0, 0) })) : null,
+      h("button", { class: "fb-del", type: "button", "aria-label": t("fb_delete"), "data-tip": t("fb_delete"), onclick: async () => {
+        S.feedback = await api("DELETE", "/api/feedback/" + n.id); updateFeedbackList(); } }, "×")))),
+    h("div", { class: "fb-row" },
+      h("button", { class: "btn small", type: "button", onclick: send }, t("fb_email")),
+      h("button", { class: "btn small quiet", type: "button", onclick: copy }, t("fb_copy")),
+      h("span", { class: "muted fb-hint" }, t("fb_send_help"))));
+}
+
 // Updates (tekst/update.py): one notice per session when a new version has been downloaded
 function updateLine() {
   const u = (S.state && S.state.update) || {};
@@ -288,8 +372,14 @@ function viewJobs() {
     h("div", { id: "statsline", class: "statsline" }),
     h("div", { id: "batchbar", class: "batchbar" }),
     h("ol", { id: "joblist", class: "joblist" }),
+    h("section", { class: "feedback" },
+      h("h2", null, t("fb_title")),
+      h("p", { class: "muted" }, t("fb_lead")),
+      feedbackBox().el,
+      h("div", { id: "fblist" })),
     h("p", { class: "fineprint" }, t("privacy")));
   updateJobs();
+  loadFeedback();
 }
 
 async function pickFiles() {
