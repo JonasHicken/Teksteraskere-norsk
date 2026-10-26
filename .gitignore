@@ -10,3 +10,6 @@ __pycache__/
 version.txt
 dev/loading_preview.html
 .claude/
+# Keys and secrets
+.env
+.env.*
