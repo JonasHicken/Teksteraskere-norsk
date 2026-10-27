@@ -385,8 +385,8 @@ function viewJobs() {
   loadNews();
 }
 
-// ---- "Hva er nytt": release notes from static/changelog.json (newest first), written in Norwegian for every
-// published update. The button gets a dot until the newest note has been opened (settings.seen_release).
+// ---- "Hva er nytt": release notes from static/changelog.json (newest first), written in Norwegian and English
+// for every published update. The button gets a dot until the newest note has been opened (settings.seen_release).
 async function loadNews() {
   if (!S.news) {
     try { S.news = await (await fetch("/static/changelog.json", { cache: "no-store" })).json(); } catch (_) { S.news = []; }
@@ -399,14 +399,15 @@ async function loadNews() {
 
 function newsDate(iso) {
   const d = new Date(iso + "T12:00:00");
-  return isNaN(d) ? iso : d.toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+  return isNaN(d) ? iso : d.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
 }
 
 function newsEntry(e, tag) {
+  const txt = (LANG === "nb" ? e.no : e.en) || e.no;
   return h("article", { class: "news-entry" },
-    h(tag, null, t("news_update", { n: e.n }) + ": " + e.title),
+    h(tag, null, t("news_update", { n: e.n }) + ": " + txt.title),
     h("p", { class: "news-date" }, t("news_released", { date: newsDate(e.date) })),
-    h("ul", null, e.items.map((x) => h("li", null, x))));
+    h("ul", null, txt.items.map((x) => h("li", null, x))));
 }
 
 function openNews() {

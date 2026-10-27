@@ -1,49 +1,38 @@
 [
   {
+    "n": 6,
+    "date": "2026-10-27",
+    "no": { "title": "Engelske oppdateringsnotater", "items": ["«Hva er nytt» vises på engelsk når appen er på engelsk."] },
+    "en": { "title": "Release notes in English", "items": ["“What's new” is shown in English when the app is in English."] }
+  },
+  {
     "n": 5,
     "date": "2026-10-27",
-    "title": "Hva er nytt",
-    "items": [
-      "Ny knapp «Hva er nytt» øverst til høyre på forsiden. Her ser du hva som er endret i hver oppdatering, og du kan bla i alle tidligere oppdateringer."
-    ]
+    "no": { "title": "Hva er nytt", "items": ["Se hva som er nytt i hver oppdatering, øverst til høyre på forsiden."] },
+    "en": { "title": "What's new", "items": ["See what's new in each update, in the top right of the home screen."] }
   },
   {
     "n": 4,
     "date": "2026-10-27",
-    "title": "Mer naturlige setninger",
-    "items": [
-      "Setninger som talemodellen delte opp ved et pust, settes sammen igjen: «Han liker fotball. Og han går på skole.» blir «Han liker fotball, og han går på skole.»",
-      "Det samme gjelder setninger som fortsetter med «men», «eller», «fordi», «at» og «så».",
-      "Manglende komma før «men», og før «og» og «eller» mellom to hele setninger, legges til.",
-      "Gjelder nye videoer. Videoer som allerede er tekstet, endres ikke."
-    ]
+    "no": { "title": "Mer naturlige setninger", "items": ["Setninger deles ikke lenger opp unødvendig, og manglende komma legges til."] },
+    "en": { "title": "More natural sentences", "items": ["Sentences are no longer split up needlessly, and missing commas are added."] }
   },
   {
     "n": 3,
     "date": "2026-10-26",
-    "title": "Tilbakemelding",
-    "items": [
-      "Ny boks for tilbakemelding på forsiden og i redigeringen. Notatene lagres på PC-en din, og du sender dem selv på e-post eller ved å kopiere dem."
-    ]
+    "no": { "title": "Tilbakemelding", "items": ["Ny boks for å skrive tilbakemelding, på forsiden og i redigeringen."] },
+    "en": { "title": "Feedback", "items": ["New box for writing feedback, on the home screen and in the editor."] }
   },
   {
     "n": 2,
     "date": "2026-10-25",
-    "title": "Automatiske oppdateringer",
-    "items": [
-      "Teksting henter nye versjoner selv og tar dem i bruk neste gang programmet startes. Kan slås av under Innstillinger.",
-      "Første gang får du beskjed om at talemodellen må lastes ned, med en knapp for å laste den ned med en gang."
-    ]
+    "no": { "title": "Automatiske oppdateringer", "items": ["Teksting oppdaterer seg selv ved neste oppstart."] },
+    "en": { "title": "Automatic updates", "items": ["Teksting updates itself the next time it starts."] }
   },
   {
     "n": 1,
     "date": "2026-10-24",
-    "title": "Bedre undertekster og redigering",
-    "items": [
-      "Forkortelser skrives ut («f.eks.» blir «for eksempel»).",
-      "Linjene blir omtrent like lange, og undertekstene deles på naturlige steder.",
-      "Tale som ikke fikk tekst, vises på tidslinjen, og du kan sette inn det den raske modellen hørte.",
-      "Du kan dra videoer rett inn i vinduet."
-    ]
+    "no": { "title": "Bedre undertekster", "items": ["Forkortelser skrives ut, og linjene deles på mer naturlige steder.", "Du kan dra videoer rett inn i vinduet."] },
+    "en": { "title": "Better subtitles", "items": ["Abbreviations are written out, and lines are split at more natural places.", "You can drag videos straight into the window."] }
   }
 ]
