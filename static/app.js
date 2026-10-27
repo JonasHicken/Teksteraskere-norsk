@@ -360,9 +360,11 @@ function viewJobs() {
     h("option", { value: "no", selected: st.language === "no" }, "Bokmål"),
     h("option", { value: "nn", selected: st.language === "nn" }, "Nynorsk"));
   v.replaceChildren(
-    h("section", { class: "intro" },
-      h("h1", null, t("jobs_title")),
-      h("p", { class: "lead" }, t("jobs_lead"))),
+    h("section", { class: "intro has-news" },
+      h("div", null,
+        h("h1", null, t("jobs_title")),
+        h("p", { class: "lead" }, t("jobs_lead"))),
+      h("button", { class: "btn news-btn", type: "button", id: "news-btn", onclick: () => openNews() }, t("news_button"))),
     h("div", { id: "modelnotice" }),
     h("div", { class: "addbar" },
       h("button", { class: "btn primary big", type: "button", id: "add", onclick: pickFiles }, t("add_videos")),
@@ -380,6 +382,53 @@ function viewJobs() {
     h("p", { class: "fineprint" }, t("privacy")));
   updateJobs();
   loadFeedback();
+  loadNews();
+}
+
+// ---- "Hva er nytt": release notes from static/changelog.json (newest first), written in Norwegian for every
+// published update. The button gets a dot until the newest note has been opened (settings.seen_release).
+async function loadNews() {
+  if (!S.news) {
+    try { S.news = await (await fetch("/static/changelog.json", { cache: "no-store" })).json(); } catch (_) { S.news = []; }
+  }
+  const b = $("#news-btn");
+  if (!b) return;
+  b.hidden = !S.news.length;
+  b.classList.toggle("unseen", !!S.news.length && S.news[0].n > (S.state.settings.seen_release || 0));
+}
+
+function newsDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return isNaN(d) ? iso : d.toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function newsEntry(e, tag) {
+  return h("article", { class: "news-entry" },
+    h(tag, null, t("news_update", { n: e.n }) + ": " + e.title),
+    h("p", { class: "news-date" }, t("news_released", { date: newsDate(e.date) })),
+    h("ul", null, e.items.map((x) => h("li", null, x))));
+}
+
+function openNews() {
+  const d = $("#news"), [latest, ...older] = S.news || [];
+  if (!latest) return;
+  const log = h("div", { class: "news-log", hidden: true },
+    h("h3", null, t("news_log")), older.map((e) => newsEntry(e, "h4")));
+  const toggle = h("button", { class: "link", type: "button", onclick: () => {
+    log.hidden = !log.hidden;
+    toggle.textContent = t(log.hidden ? "news_show_log" : "news_hide_log");
+  } }, t("news_show_log"));
+  d.replaceChildren(h("form", { method: "dialog" },
+    h("p", { class: "news-kicker" }, t("news_title")),
+    h("div", { id: "news-title" }, newsEntry(latest, "h2")),
+    log,
+    h("div", { class: "dlg-actions" },
+      older.length ? toggle : null,
+      h("button", { class: "btn primary", value: "ok" }, t("close")))));
+  d.showModal();
+  d.querySelector(".btn.primary").focus();
+  if (latest.n > (S.state.settings.seen_release || 0))
+    saveSettings({ seen_release: latest.n }).then(loadNews).catch(() => {});
 }
 
 async function pickFiles() {

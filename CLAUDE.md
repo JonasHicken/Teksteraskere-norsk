@@ -89,6 +89,11 @@ Safety (bug check 2026-10-25): skipped while another copy runs (mutex `Local\Tek
 read via git refs (no API limit); never backwards (compare API, best effort; undo a release with `git revert` +
 publish); a version that never reaches the first `/api/state` is rolled back at the following start and its sha
 goes to `data/update/skip.txt`; the app shows a one-time notice. Steps are logged to `data/teksting.log`.
+**Release notes (owner's standing rule, 2026-10-27): every publish gets one.** Before running publish, add a
+new entry at the top of `static/changelog.json` (`n` = previous + 1, `date` = today, a short `title`, `items` =
+what changed for the user, in plain Norwegian bokmål, no internal or technical terms). It is shown under
+"Hva er nytt" on the Videoer page (dot until opened, `settings.seen_release`). `publish.ps1` refuses when the
+top entry is not newer than the one on the `release` branch; `tests/test_changelog.py` checks the format.
 
 ## Run it
 - **Users**: double-click `start.bat` once (downloads uv → Python 3.12 → packages into `runtime\` — no venv, see below,

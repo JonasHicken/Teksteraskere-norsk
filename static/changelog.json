@@ -1,0 +1,49 @@
+[
+  {
+    "n": 5,
+    "date": "2026-10-27",
+    "title": "Hva er nytt",
+    "items": [
+      "Ny knapp «Hva er nytt» øverst til høyre på forsiden. Her ser du hva som er endret i hver oppdatering, og du kan bla i alle tidligere oppdateringer."
+    ]
+  },
+  {
+    "n": 4,
+    "date": "2026-10-27",
+    "title": "Mer naturlige setninger",
+    "items": [
+      "Setninger som talemodellen delte opp ved et pust, settes sammen igjen: «Han liker fotball. Og han går på skole.» blir «Han liker fotball, og han går på skole.»",
+      "Det samme gjelder setninger som fortsetter med «men», «eller», «fordi», «at» og «så».",
+      "Manglende komma før «men», og før «og» og «eller» mellom to hele setninger, legges til.",
+      "Gjelder nye videoer. Videoer som allerede er tekstet, endres ikke."
+    ]
+  },
+  {
+    "n": 3,
+    "date": "2026-10-26",
+    "title": "Tilbakemelding",
+    "items": [
+      "Ny boks for tilbakemelding på forsiden og i redigeringen. Notatene lagres på PC-en din, og du sender dem selv på e-post eller ved å kopiere dem."
+    ]
+  },
+  {
+    "n": 2,
+    "date": "2026-10-25",
+    "title": "Automatiske oppdateringer",
+    "items": [
+      "Teksting henter nye versjoner selv og tar dem i bruk neste gang programmet startes. Kan slås av under Innstillinger.",
+      "Første gang får du beskjed om at talemodellen må lastes ned, med en knapp for å laste den ned med en gang."
+    ]
+  },
+  {
+    "n": 1,
+    "date": "2026-10-24",
+    "title": "Bedre undertekster og redigering",
+    "items": [
+      "Forkortelser skrives ut («f.eks.» blir «for eksempel»).",
+      "Linjene blir omtrent like lange, og undertekstene deles på naturlige steder.",
+      "Tale som ikke fikk tekst, vises på tidslinjen, og du kan sette inn det den raske modellen hørte.",
+      "Du kan dra videoer rett inn i vinduet."
+    ]
+  }
+]
