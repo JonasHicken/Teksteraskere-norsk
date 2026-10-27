@@ -166,19 +166,58 @@ LOWER_MID = set("""jeg du han hun vi dere de det den denne dette disse dem meg d
 
 # The model ends a sentence at every breath, so one sentence comes out as two: "Han liker fotball. Og han går
 # på skole." When the next "sentence" starts with a word that only continues the one before, they are joined
-# again: with a comma before og/men/eller (two main clauses), without one before fordi (a subordinate clause).
+# again: with a comma before og/men/eller/så (two main clauses), without one before fordi/at (a subordinate
+# clause). "Så" only when a subject follows ("Så vi ble hjemme"): "Så gikk vi hjem" is a sentence of its own.
+# "At" only after a verb like "tror" ("Jeg tror. At det går bra"): "At vi kom fram var flaks" can start one.
 # Only after a plain full stop (not ? or !) and a short pause; a long pause is a real break or a new speaker.
-JOIN_COMMA = set("og men eller".split())
-JOIN_PLAIN = set("fordi".split())
+JOIN_COMMA = set("og men eller så".split())
+JOIN_PLAIN = set("fordi at".split())
+SUBJECT = set("jeg du han hun vi dere de man det eg ho me dei".split())
+SAY_VERBS = set("""tror trodde vet visste sier sa mener mente håper håpet tenker tenkte synes syntes føler
+    følte betyr viser klart trur veit seier meiner tykkjer""".split())
 
 
 def join_sentences(words, p):
-    for prev, w in zip(words, words[1:]):
+    for k, (prev, w) in enumerate(zip(words, words[1:])):
         c = core(w)
+        nxt = core(words[k + 2]) if k + 2 < len(words) else ""
         if (c in JOIN_COMMA or c in JOIN_PLAIN) and w.text[:1].isupper() and not w.text[1:2].isupper() \
-                and re.search(r"\w\.$", prev.text) and w.start - prev.end < p.hard_pause:
+                and re.search(r"\w\.$", prev.text) and w.start - prev.end < p.hard_pause \
+                and (c != "så" or nxt in SUBJECT) and (c != "at" or core(prev) in SAY_VERBS):
             prev.text = prev.text[:-1] + ("," if c in JOIN_COMMA else "")
             w.text = w.text[0].lower() + w.text[1:]
+    return words
+
+
+# Norwegian puts a comma before men, and before og/eller when they join two whole clauses. The model often
+# leaves it out ("Han liker fotball og han går på skole"). "men" always gets one; og/eller only when a subject
+# and a verb follow (or a verb and a subject: "eller vil du ha te?") and the part before has a verb of its own,
+# so "epler og pærer" and "han og jeg kom" do not.
+FINITE = set("""er var har hadde blir ble kan kunne skal skulle vil ville må måtte får fikk gjør gjorde går gikk
+    kom sier sa tar tok ser så liker likte tror trodde vet visste synes syntes heter het bor bodde fant ga gav
+    vart gjer seier tek trur veit likar""".split())
+
+
+def has_verb(c):
+    return c in FINITE or (len(c) >= 4 and c.endswith("er"))
+
+
+def add_commas(words):
+    start = 0  # first word of the current clause
+    for k in range(1, len(words)):
+        prev, c = words[k - 1], core(words[k])
+        if re.search(r"[.!?…,;:–—-][\"»”)]*$", prev.text):
+            start = k
+            continue
+        if c == "men" and k > start:
+            prev.text += ","
+            start = k
+        elif c in ("og", "eller") and k - start >= 2 and k + 2 < len(words) \
+                and ((core(words[k + 1]) in SUBJECT and has_verb(core(words[k + 2])))
+                     or (core(words[k + 1]) in FINITE and core(words[k + 2]) in SUBJECT)) \
+                and any(has_verb(core(x)) for x in words[start:k]):
+            prev.text += ","
+            start = k
     return words
 
 
@@ -397,7 +436,7 @@ def params(rules=None, **extra):
 def make_cues(raw_words, p):
     """raw_words: [{"w","s","e","p"}] -> [{"start","end","text"}] (text lines joined by \\n)."""
     words = clean_words([Word(w["w"], w["s"], w["e"], w.get("p", 1.0)) for w in raw_words], p)
-    words = fix_capitals(join_sentences(expand_abbreviations(words, p.lang), p))
+    words = add_commas(fix_capitals(join_sentences(expand_abbreviations(words, p.lang), p)))
     if not words:
         return []
     cues = time_cues(build_cues(words, p), words, p)

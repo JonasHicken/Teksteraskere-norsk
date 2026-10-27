@@ -296,6 +296,21 @@ def test_a_sentence_the_model_split_at_a_breath_is_joined_again():
     assert text_of("Det er bra. Vi ses.") == "Det er bra. Vi ses."
     w = words_from("Ferdig for i dag. Og nå til noe helt annet.", pause_after={3: 2.0})
     assert "dag. Og nå" in " ".join(c["text"].replace("\n", " ") for c in make_cues(w, params()))  # long pause
+    assert text_of("Jeg tror. At det går bra.") == "Jeg tror at det går bra."
+    assert text_of("Det regnet. Så vi ble hjemme.") == "Det regnet, så vi ble hjemme."
+    assert text_of("Vi spiste. Så gikk vi hjem.") == "Vi spiste. Så gikk vi hjem."  # "så" = then: its own sentence
+    assert text_of("Det tok tid. At vi kom fram var flaks.") == "Det tok tid. At vi kom fram var flaks."
+
+
+def test_missing_comma_between_two_clauses_is_added():
+    assert text_of("Han liker fotball og han går på skole.") == "Han liker fotball, og han går på skole."
+    assert text_of("Det er dyrt men vi kjøper det.") == "Det er dyrt, men vi kjøper det."
+    assert text_of("Vil du ha kaffe eller vil du ha te?") == "Vil du ha kaffe, eller vil du ha te?"
+    # og/eller between words, not whole clauses: no comma
+    for t in ("Jeg kjøpte epler og pærer.", "Han og jeg kom sent.", "Mamma og pappa og jeg dro.",
+              "Vi har kaffe eller te.", "Det er rødt og det blå er fint.", "Men vi er ikke ferdige.",
+              "Det er bra, men dyrt."):
+        assert text_of(t) == t
 
 
 def test_written_out_abbreviation_has_a_capital_only_at_a_sentence_start():
