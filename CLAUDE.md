@@ -94,7 +94,8 @@ new entry at the top of `static/changelog.json` (`n` = previous + 1, `date` = to
 with a short `title` and `items` = what changed for the user, in plain bokmål and the same in English, no
 internal or technical terms; the app shows the one matching its language). It is shown under
 "Hva er nytt" on the Videoer page (dot until opened, `settings.seen_release`). `publish.ps1` refuses when the
-top entry is not newer than the one on the `release` branch; `tests/test_changelog.py` checks the format.
+top entry is not newer than the one on the `release` branch, unless run with `-NoNotes` (only when the owner
+says an update should go out without notes); `tests/test_changelog.py` checks the format.
 
 ## Run it
 - **Users**: double-click `start.bat` once (downloads uv → Python 3.12 → packages into `runtime\` — no venv, see below,

@@ -1,11 +1,5 @@
 [
   {
-    "n": 6,
-    "date": "2026-10-27",
-    "no": { "title": "Engelske oppdateringsnotater", "items": ["«Hva er nytt» vises på engelsk når appen er på engelsk."] },
-    "en": { "title": "Release notes in English", "items": ["“What's new” is shown in English when the app is in English."] }
-  },
-  {
     "n": 5,
     "date": "2026-10-27",
     "no": { "title": "Hva er nytt", "items": ["Se hva som er nytt i hver oppdatering, øverst til høyre på forsiden."] },
