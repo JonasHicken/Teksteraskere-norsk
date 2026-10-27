@@ -287,6 +287,17 @@ def test_mid_sentence_capitals_from_the_model_are_lowered_but_names_keep_theirs(
     assert text_of("Det er bra. Vi ses.") == "Det er bra. Vi ses."  # sentence starts keep the capital
 
 
+def test_a_sentence_the_model_split_at_a_breath_is_joined_again():
+    """End user: "Han liker fotball. Og han går på skole." should be one sentence."""
+    assert text_of("Han liker fotball. Og han går på skole.") == "Han liker fotball, og han går på skole."
+    assert text_of("Det er bra. Men vi er ikke ferdige.") == "Det er bra, men vi er ikke ferdige."
+    assert text_of("Vi blir hjemme. Fordi det regner.") == "Vi blir hjemme fordi det regner."
+    assert text_of("Kommer du? Og når?") == "Kommer du? Og når?"  # only after a full stop
+    assert text_of("Det er bra. Vi ses.") == "Det er bra. Vi ses."
+    w = words_from("Ferdig for i dag. Og nå til noe helt annet.", pause_after={3: 2.0})
+    assert "dag. Og nå" in " ".join(c["text"].replace("\n", " ") for c in make_cues(w, params()))  # long pause
+
+
 def test_written_out_abbreviation_has_a_capital_only_at_a_sentence_start():
     assert text_of("Vi ser F.eks. at det går. F.eks. dette.") == "Vi ser for eksempel at det går. For eksempel dette."
     assert text_of("bra. f.eks. her") == "bra. For eksempel her"

@@ -164,6 +164,24 @@ LOWER_MID = set("""jeg du han hun vi dere de det den denne dette disse dem meg d
     egentlig faktisk eg ho me dei ikkje berre kva korleis kvifor kven""".split())
 
 
+# The model ends a sentence at every breath, so one sentence comes out as two: "Han liker fotball. Og han går
+# på skole." When the next "sentence" starts with a word that only continues the one before, they are joined
+# again: with a comma before og/men/eller (two main clauses), without one before fordi (a subordinate clause).
+# Only after a plain full stop (not ? or !) and a short pause; a long pause is a real break or a new speaker.
+JOIN_COMMA = set("og men eller".split())
+JOIN_PLAIN = set("fordi".split())
+
+
+def join_sentences(words, p):
+    for prev, w in zip(words, words[1:]):
+        c = core(w)
+        if (c in JOIN_COMMA or c in JOIN_PLAIN) and w.text[:1].isupper() and not w.text[1:2].isupper() \
+                and re.search(r"\w\.$", prev.text) and w.start - prev.end < p.hard_pause:
+            prev.text = prev.text[:-1] + ("," if c in JOIN_COMMA else "")
+            w.text = w.text[0].lower() + w.text[1:]
+    return words
+
+
 def fix_capitals(words):
     for prev, w in zip(words, words[1:]):
         if w.text[:1].isupper() and not SENT_END.search(prev.text) and core(w) in LOWER_MID \
@@ -379,7 +397,7 @@ def params(rules=None, **extra):
 def make_cues(raw_words, p):
     """raw_words: [{"w","s","e","p"}] -> [{"start","end","text"}] (text lines joined by \\n)."""
     words = clean_words([Word(w["w"], w["s"], w["e"], w.get("p", 1.0)) for w in raw_words], p)
-    words = fix_capitals(expand_abbreviations(words, p.lang))
+    words = fix_capitals(join_sentences(expand_abbreviations(words, p.lang), p))
     if not words:
         return []
     cues = time_cues(build_cues(words, p), words, p)
