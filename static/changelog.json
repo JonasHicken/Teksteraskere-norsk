@@ -1,5 +1,11 @@
 [
   {
+    "n": 6,
+    "date": "2026-10-31",
+    "no": { "title": "Færre feilplasserte punktum", "items": ["Det settes ikke lenger punktum midt i en setning."] },
+    "en": { "title": "Fewer misplaced full stops", "items": ["Full stops are no longer put in the middle of a sentence."] }
+  },
+  {
     "n": 5,
     "date": "2026-10-27",
     "no": { "title": "Hva er nytt", "items": ["Se hva som er nytt i hver oppdatering, øverst til høyre på forsiden."] },

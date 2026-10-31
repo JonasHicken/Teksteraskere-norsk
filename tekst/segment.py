@@ -112,6 +112,7 @@ ABBREV_NN = {  # nynorsk spells some of them differently
     "dvs.": "det vil seie", "dvs": "det vil seie", "o.l.": "og liknande", "kl.": "klokka",
     "bl.a.": "mellom anna", "bl.a": "mellom anna",
 }
+ENDERS = {"og så videre", "et cetera", "med mer", "og lignende", "og liknande", "og så bortetter"}
 WRAP_RE = re.compile(r'^(["«“(]*)(.*?)([,;:!?…"»”)]*)$')
 
 
@@ -136,7 +137,8 @@ def expand_abbreviations(words, lang="no"):
         group = words[k:k + span]
         nxt = words[k + span] if k + span < len(words) else None
         ended = nxt is None or nxt.text.strip()[:1].isupper()
-        dot = "." if m.group(2).endswith(".") and not m.group(3) and ended else ""
+        # only "osv."-like ones can end a sentence; "f.eks. Telenor" is a name after it, not a new sentence
+        dot = "." if m.group(2).endswith(".") and not m.group(3) and (nxt is None or ended and full in ENDERS) else ""
         if not out or SENT_END.search(out[-1].text):  # capital only at the start of a sentence
             full = full[0].upper() + full[1:]
         parts = full.split()
@@ -175,6 +177,22 @@ JOIN_PLAIN = set("fordi at".split())
 SUBJECT = set("jeg du han hun vi dere de man det eg ho me dei".split())
 SAY_VERBS = set("""tror trodde vet visste sier sa mener mente håper håpet tenker tenkte synes syntes føler
     følte betyr viser klart trur veit seier meiner tykkjer""".split())
+
+
+# A full stop followed by a small letter is never right ("har ansvaret. for å fastsette"). It comes from
+# re-listening: words the first pass skipped are put back into a gap, after the full stop the first pass ended
+# with (or with the clip's own full stop at their end). Within hard_pause it is dropped (the sentence goes on);
+# after a longer pause the next word gets the capital instead. "17. mai" and "2. plass" keep theirs.
+def fix_stray_stops(words, p):
+    for prev, w in zip(words, words[1:]):
+        if w.text[:1].islower() and re.search(r"[^\W\d]\.$", prev.text):
+            if w.start - prev.end < p.hard_pause:
+                prev.text = prev.text[:-1]
+            else:
+                w.text = w.text[0].upper() + w.text[1:]
+        elif w.text[:1].islower() and re.search(r"[?!][\"»”)]*$", prev.text):
+            w.text = w.text[0].upper() + w.text[1:]  # "frontfaget? arbeidsfolk." -> a new sentence after ? and !
+    return words
 
 
 def join_sentences(words, p):
@@ -436,7 +454,8 @@ def params(rules=None, **extra):
 def make_cues(raw_words, p):
     """raw_words: [{"w","s","e","p"}] -> [{"start","end","text"}] (text lines joined by \\n)."""
     words = clean_words([Word(w["w"], w["s"], w["e"], w.get("p", 1.0)) for w in raw_words], p)
-    words = add_commas(fix_capitals(join_sentences(expand_abbreviations(words, p.lang), p)))
+    words = expand_abbreviations(words, p.lang)
+    words = add_commas(fix_capitals(join_sentences(fix_stray_stops(words, p), p)))
     if not words:
         return []
     cues = time_cues(build_cues(words, p), words, p)

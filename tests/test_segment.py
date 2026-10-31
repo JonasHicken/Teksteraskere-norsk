@@ -302,6 +302,26 @@ def test_a_sentence_the_model_split_at_a_breath_is_joined_again():
     assert text_of("Det tok tid. At vi kom fram var flaks.") == "Det tok tid. At vi kom fram var flaks."
 
 
+def test_no_full_stop_in_the_middle_of_a_sentence():
+    """End user: a "." now and then in the middle of a sentence. Words put back by re-listening land after the
+    full stop the first pass ended with ("har ansvaret. for å fastsette lønna", from a real transcript)."""
+    assert text_of("Det er styret som har ansvaret. for å fastsette lønna.") == \
+        "Det er styret som har ansvaret for å fastsette lønna."
+    assert text_of("Det er vanskelig å forstå. og jeg har problemer med det.") == \
+        "Det er vanskelig å forstå, og jeg har problemer med det."
+    w = words_from("Det var alt. er det flere spørsmål?", pause_after={2: 2.0})  # long pause: a new sentence
+    assert " ".join(c["text"].replace("\n", " ") for c in make_cues(w, params())) == "Det var alt. Er det flere spørsmål?"
+    assert text_of("Han kom den 17. mai og ble nummer 2. plass er bra.") == "Han kom den 17. mai og ble nummer 2. plass er bra."
+    assert text_of("Er det høyere enn frontfaget? arbeidsfolk merker det.") == \
+        "Er det høyere enn frontfaget? Arbeidsfolk merker det."
+
+
+def test_written_out_abbreviation_before_a_name_has_no_full_stop():
+    assert text_of("Selskaper som f.eks. Telenor har tjent mye.") == "Selskaper som for eksempel Telenor har tjent mye."
+    assert text_of("Vi har bl.a. Equinor og Hydro.") == "Vi har blant annet Equinor og Hydro."
+    assert text_of("Vi selger epler osv. Det er bra.") == "Vi selger epler og så videre. Det er bra."
+
+
 def test_missing_comma_between_two_clauses_is_added():
     assert text_of("Han liker fotball og han går på skole.") == "Han liker fotball, og han går på skole."
     assert text_of("Det er dyrt men vi kjøper det.") == "Det er dyrt, men vi kjøper det."
